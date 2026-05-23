@@ -1,3 +1,4 @@
+from django.contrib.auth.hashers import check_password, make_password
 from django.db import models
 
 
@@ -14,6 +15,12 @@ class Utilisateur(models.Model):
         db_table = 'UTILISATEUR'
         verbose_name = 'Utilisateur'
         verbose_name_plural = 'Utilisateurs'
+
+    def set_password(self, raw_password):
+        self.mot_de_passe = make_password(raw_password)
+
+    def check_password(self, raw_password):
+        return check_password(raw_password, self.mot_de_passe)
 
     def __str__(self):
         return f"{self.prenom} {self.nom}"
