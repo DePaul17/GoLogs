@@ -1,3 +1,5 @@
+"""Module de génération de rapports au format CSV basés sur les logs, anomalies et alertes."""
+
 import csv
 from pathlib import Path
 from django.utils import timezone

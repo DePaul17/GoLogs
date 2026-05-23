@@ -1,3 +1,5 @@
+"""Module de génération et de mise à jour des alertes automatiques."""
+
 from django.utils import timezone
 from logs.models import Anomalie, Alerte
 
