@@ -1,8 +1,9 @@
 from django.test import TestCase
 from django.utils import timezone
 from logs.utils import parse_log_line
-from logs.models import SourceLog, Serveur, LogEntree, Anomalie, Alerte
+from logs.models import SourceLog, Serveur, LogEntree, Anomalie, Alerte, Utilisateur
 from logs.alerting import create_alert, generate_alerts_for_undetected_anomalies
+from logs.auth import authenticate_user
 
 
 class LogUtilsTest(TestCase):
@@ -41,6 +42,43 @@ class LogUtilsTest(TestCase):
         self.assertEqual(parsed['niveau'], 'INFO')
         self.assertEqual(parsed['service'], 'backup_service')
         self.assertEqual(parsed['message'], 'Sauvegarde terminée')
+
+
+class AuthTest(TestCase):
+    def test_authenticate_user_success(self):
+        utilisateur = Utilisateur.objects.create(
+            nom='Diallo',
+            prenom='Aramata',
+            email='aramata@example.com',
+            mot_de_passe='',
+            role='admin',
+        )
+        utilisateur.set_password('MotDePasse2026')
+        utilisateur.save()
+
+        authenticated = authenticate_user('aramata@example.com', 'MotDePasse2026')
+
+        self.assertIsNotNone(authenticated)
+        self.assertEqual(authenticated.email, 'aramata@example.com')
+
+    def test_authenticate_user_wrong_password(self):
+        utilisateur = Utilisateur.objects.create(
+            nom='Diallo',
+            prenom='Aramata',
+            email='aramata@example.com',
+            mot_de_passe='',
+            role='admin',
+        )
+        utilisateur.set_password('MotDePasse2026')
+        utilisateur.save()
+
+        authenticated = authenticate_user('aramata@example.com', 'MauvaisMotDePasse')
+
+        self.assertIsNone(authenticated)
+
+    def test_authenticate_user_unknown_email(self):
+        authenticated = authenticate_user('inconnu@example.com', 'MotDePasse2026')
+        self.assertIsNone(authenticated)
 
 
 class AlertingTest(TestCase):
