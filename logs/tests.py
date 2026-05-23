@@ -1,5 +1,8 @@
 from django.test import TestCase
+from django.utils import timezone
 from logs.utils import parse_log_line
+from logs.models import SourceLog, Serveur, LogEntree, Anomalie, Alerte
+from logs.alerting import create_alert, generate_alerts_for_undetected_anomalies
 
 
 class LogUtilsTest(TestCase):
@@ -38,3 +41,86 @@ class LogUtilsTest(TestCase):
         self.assertEqual(parsed['niveau'], 'INFO')
         self.assertEqual(parsed['service'], 'backup_service')
         self.assertEqual(parsed['message'], 'Sauvegarde terminée')
+
+
+class AlertingTest(TestCase):
+    def setUp(self):
+        self.source = SourceLog.objects.create(nom_source='Source A', type_source='syslog')
+        self.serveur = Serveur.objects.create(nom_serveur='Server1', adresse_ip='192.168.1.1')
+
+    def test_create_alert_for_anomalie(self):
+        log = LogEntree.objects.create(
+            source=self.source,
+            serveur=self.serveur,
+            horodatage=timezone.now(),
+            niveau='ERROR',
+            service='auth',
+            message='Échec de connexion',
+            statut_traitement='NOUVEAU',
+            date_insertion=timezone.now(),
+        )
+        anomalie = Anomalie.objects.create(
+            log=log,
+            type_anomalie='Erreur critique',
+            score=90.0,
+            description='Mot de passe invalide',
+            date_detection=timezone.now(),
+        )
+
+        alert = create_alert(anomalie)
+
+        self.assertIsNotNone(alert)
+        self.assertEqual(alert.severite, 'CRITIQUE')
+        self.assertEqual(alert.canal, 'TABLEAU_DE_BORD')
+        self.assertEqual(alert.statut, 'NOUVEAU')
+        self.assertEqual(alert.anomalie, anomalie)
+
+    def test_generate_alerts_for_undetected_anomalies(self):
+        log = LogEntree.objects.create(
+            source=self.source,
+            serveur=self.serveur,
+            horodatage=timezone.now(),
+            niveau='WARN',
+            service='api',
+            message='Temps de réponse élevé',
+            statut_traitement='NOUVEAU',
+            date_insertion=timezone.now(),
+        )
+        anomalie = Anomalie.objects.create(
+            log=log,
+            type_anomalie='Alerte de performance',
+            score=55.0,
+            description='Dégradation CPU',
+            date_detection=timezone.now(),
+        )
+
+        alerts = generate_alerts_for_undetected_anomalies()
+
+        self.assertEqual(len(alerts), 1)
+        self.assertEqual(alerts[0].severite, 'MAJEUR')
+        self.assertEqual(Alerte.objects.filter(anomalie=anomalie).count(), 1)
+
+    def test_generate_alerts_skips_existing(self):
+        log = LogEntree.objects.create(
+            source=self.source,
+            serveur=self.serveur,
+            horodatage=timezone.now(),
+            niveau='ERROR',
+            service='db',
+            message='Base non disponible',
+            statut_traitement='NOUVEAU',
+            date_insertion=timezone.now(),
+        )
+        anomalie = Anomalie.objects.create(
+            log=log,
+            type_anomalie='Erreur critique',
+            score=95.0,
+            description='Erreur de base de données',
+            date_detection=timezone.now(),
+        )
+        create_alert(anomalie)
+
+        alerts = generate_alerts_for_undetected_anomalies()
+
+        self.assertEqual(len(alerts), 0)
+        self.assertEqual(Alerte.objects.filter(anomalie=anomalie).count(), 1)
