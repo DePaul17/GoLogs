@@ -51,3 +51,12 @@ def generate_alerts_for_undetected_anomalies():
             if alert:
                 created.append(alert)
     return created
+
+
+def update_alert_status(id_alerte, statut):
+    alert = Alerte.objects.filter(id_alerte=id_alerte).first()
+    if not alert:
+        raise ValueError(f"Alerte introuvable : {id_alerte}")
+    alert.statut = statut
+    alert.save()
+    return alert

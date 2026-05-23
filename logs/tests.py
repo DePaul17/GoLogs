@@ -162,3 +162,85 @@ class AlertingTest(TestCase):
 
         self.assertEqual(len(alerts), 0)
         self.assertEqual(Alerte.objects.filter(anomalie=anomalie).count(), 1)
+
+
+class AlertProcessingTest(TestCase):
+    def setUp(self):
+        self.source = SourceLog.objects.create(nom_source='Source B', type_source='syslog')
+        self.serveur = Serveur.objects.create(nom_serveur='Server2', adresse_ip='192.168.1.2')
+        self.log = LogEntree.objects.create(
+            source=self.source,
+            serveur=self.serveur,
+            horodatage=timezone.now(),
+            niveau='ERROR',
+            service='db',
+            message='Problème base',
+            statut_traitement='NOUVEAU',
+            date_insertion=timezone.now(),
+        )
+        self.anomalie = Anomalie.objects.create(
+            log=self.log,
+            type_anomalie='Erreur critique',
+            score=90.0,
+            description='Base indisponible',
+            date_detection=timezone.now(),
+        )
+        self.alert = Alerte.objects.create(
+            anomalie=self.anomalie,
+            severite='CRITIQUE',
+            canal='TABLEAU_DE_BORD',
+            statut='NOUVEAU',
+            date_alerte=timezone.now(),
+        )
+
+    def test_update_alert_status(self):
+        from logs.alerting import update_alert_status
+
+        updated = update_alert_status(self.alert.id_alerte, 'EN_COURS')
+
+        self.assertEqual(updated.statut, 'EN_COURS')
+        self.assertEqual(Alerte.objects.get(id_alerte=self.alert.id_alerte).statut, 'EN_COURS')
+
+    def test_update_alert_status_invalid_id(self):
+        from logs.alerting import update_alert_status
+
+        with self.assertRaises(ValueError):
+            update_alert_status(999999, 'RESOLU')
+
+
+class ReportGenerationTest(TestCase):
+    def setUp(self):
+        self.user = Utilisateur.objects.create(
+            nom='Test',
+            prenom='User',
+            email='test@example.com',
+            mot_de_passe='',
+            role='analyste',
+        )
+        self.user.set_password('pass')
+        self.user.save()
+        self.source = SourceLog.objects.create(nom_source='Source C', type_source='app')
+        self.serveur = Serveur.objects.create(nom_serveur='Server3', adresse_ip='192.168.1.3')
+
+    def test_generate_report_creates_rapport(self):
+        from logs.reports import generate_report
+        from datetime import date
+
+        LogEntree.objects.create(
+            source=self.source,
+            serveur=self.serveur,
+            horodatage=timezone.now(),
+            niveau='INFO',
+            service='web',
+            message='Requête traitée',
+            statut_traitement='TRAITE',
+            date_insertion=timezone.now(),
+        )
+
+        rapport = generate_report(date.today(), date.today(), utilisateur=self.user, output_dir='.')
+
+        self.assertIsNotNone(rapport)
+        self.assertEqual(rapport.utilisateur, self.user)
+        self.assertTrue(rapport.chemin_fichier.endswith('.csv'))
+        self.assertEqual(rapport.date_debut, date.today())
+        self.assertEqual(rapport.date_fin, date.today())
