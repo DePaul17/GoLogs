@@ -35,8 +35,11 @@
             <div class="nav-submenu" id="submenu-serveurs">
                 {% for entry in serveurs_en_marche %}
                 <a href="{% if entry.serveur %}?serveur={{ entry.serveur.id_serveur }}#activite{% else %}#{% endif %}" class="nav-submenu-server">
-                    <span class="nav-submenu-name">{{ entry.nom }}</span>
-                    <span class="nav-submenu-ip">{{ entry.ip }}</span>
+                    <span class="nav-submenu-line">
+                        <span class="nav-submenu-name">{{ entry.nom }}</span>
+                        <span class="nav-submenu-ip">{{ entry.ip }}</span>
+                        <span class="nav-submenu-status">UP</span>
+                    </span>
                 </a>
                 {% empty %}
                 <a href="#">Aucun serveurs en marche</a>

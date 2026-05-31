@@ -468,10 +468,15 @@ button, input, select { font-family: inherit; }
 .nav-submenu a:hover { color: var(--white); background: rgba(255, 255, 255, 0.06); }
 
 .nav-submenu-server {
+    display: block;
+    line-height: 1.35;
+}
+
+.nav-submenu-line {
     display: flex;
-    flex-direction: column;
-    gap: 0.1rem;
-    line-height: 1.25;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.5rem;
 }
 
 .nav-submenu-name {
@@ -484,8 +489,16 @@ button, input, select { font-family: inherit; }
     color: rgba(255, 255, 255, 0.45);
 }
 
+.nav-submenu-status {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: #34d399;
+}
+
 .nav-submenu a:hover .nav-submenu-name { color: var(--white); }
 .nav-submenu a:hover .nav-submenu-ip { color: rgba(255, 255, 255, 0.65); }
+.nav-submenu a:hover .nav-submenu-status { color: #6ee7b7; }
 
 .sidebar-logout {
     padding: 1rem 0.75rem 1.25rem;
