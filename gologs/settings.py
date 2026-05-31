@@ -165,3 +165,8 @@ MONITORED_SERVER_IPS = [
 NETWORK_PROBE_SSH_PORT = int(os.environ.get('NETWORK_PROBE_SSH_PORT', '22'))
 NETWORK_PROBE_TIMEOUT_SEC = float(os.environ.get('NETWORK_PROBE_TIMEOUT_SEC', '1.2'))
 NETWORK_PROBE_PARALLELISM = int(os.environ.get('NETWORK_PROBE_PARALLELISM', '8'))
+MONITORED_SERVER_NAMES = {
+    '192.168.1.10': 'MariaDB',
+    '192.168.1.11': 'Site témoin',
+    '192.168.1.12': 'Open source',
+}

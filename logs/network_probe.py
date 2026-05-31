@@ -9,6 +9,16 @@ from django.conf import settings
 from logs.models import Serveur
 
 
+def resolve_server_name(ip: str, fallback: str | None = None) -> str:
+    """Nom affiché d'un serveur monitoré (settings → BDD → IP)."""
+    known = getattr(settings, 'MONITORED_SERVER_NAMES', {}).get(ip)
+    if known:
+        return known
+    if fallback:
+        return fallback
+    return ip
+
+
 def ping_ip(ip: str, port: int = 22, timeout: float = 2.0) -> bool:
     """Vérifie si une IP répond sur un port TCP (SSH 22 par défaut)."""
     try:
@@ -21,7 +31,7 @@ def ping_ip(ip: str, port: int = 22, timeout: float = 2.0) -> bool:
 def list_running_monitored_servers() -> list[dict]:
     """
     Sonde les IP configurées en parallèle et retourne celles joignables.
-    Chaque entrée : {ip, serveur (ORM ou None), label}.
+    Chaque entrée : {ip, nom, serveur (ORM ou None), label}.
     """
     ips = getattr(
         settings,
@@ -51,9 +61,14 @@ def list_running_monitored_servers() -> list[dict]:
         if not reachable:
             continue
         serveur = db_by_ip.get(ip)
+        nom = resolve_server_name(
+            ip,
+            serveur.nom_serveur if serveur else None,
+        )
         running.append({
             'ip': ip,
+            'nom': nom,
             'serveur': serveur,
-            'label': serveur.nom_serveur if serveur else ip,
+            'label': f'{nom} ({ip})',
         })
     return running

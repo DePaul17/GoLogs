@@ -1,5 +1,7 @@
 from django import template
 
+from logs.network_probe import resolve_server_name
+
 register = template.Library()
 
 
@@ -23,6 +25,13 @@ def severite_badge(severite):
     if 'MINEUR' in s or 'WARN' in s:
         return 'mineur'
     return 'nouveau'
+
+
+@register.filter
+def server_display_name(serveur):
+    if serveur is None:
+        return ''
+    return resolve_server_name(serveur.adresse_ip, serveur.nom_serveur)
 
 
 @register.filter

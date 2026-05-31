@@ -19,13 +19,13 @@ class Command(BaseCommand):
             },
         )
         demo_serveurs = [
-            ('srv-web-01', '192.168.1.10'),
-            ('srv-web-02', '192.168.1.11'),
-            ('srv-web-03', '192.168.1.12'),
+            ('MariaDB', '192.168.1.10'),
+            ('Site témoin', '192.168.1.11'),
+            ('Open source', '192.168.1.12'),
         ]
         serveur = None
         for nom, ip in demo_serveurs:
-            srv, _ = Serveur.objects.get_or_create(
+            srv, _ = Serveur.objects.update_or_create(
                 adresse_ip=ip,
                 defaults={
                     'nom_serveur': nom,

@@ -34,7 +34,10 @@
             </button>
             <div class="nav-submenu" id="submenu-serveurs">
                 {% for entry in serveurs_en_marche %}
-                <a href="{% if entry.serveur %}?serveur={{ entry.serveur.id_serveur }}#activite{% else %}#{% endif %}">{{ entry.label }}</a>
+                <a href="{% if entry.serveur %}?serveur={{ entry.serveur.id_serveur }}#activite{% else %}#{% endif %}" class="nav-submenu-server">
+                    <span class="nav-submenu-name">{{ entry.nom }}</span>
+                    <span class="nav-submenu-ip">{{ entry.ip }}</span>
+                </a>
                 {% empty %}
                 <a href="#">Aucun serveurs en marche</a>
                 {% endfor %}
@@ -119,7 +122,7 @@
                                     <select id="serveur" name="serveur">
                                         <option value="">Tous les serveurs</option>
                                         {% for serveur in serveurs_disponibles %}
-                                        <option value="{{ serveur.id_serveur }}" {% if log_filters.serveur == serveur.id_serveur|stringformat:"s" %}selected{% endif %}>{{ serveur.nom_serveur }}</option>
+                                        <option value="{{ serveur.id_serveur }}" {% if log_filters.serveur == serveur.id_serveur|stringformat:"s" %}selected{% endif %}>{{ serveur|server_display_name }} ({{ serveur.adresse_ip }})</option>
                                         {% endfor %}
                                     </select>
                                 </div>
@@ -210,7 +213,7 @@
                                     <td>
                                         <span class="server-cell">
                                             <span class="server-dot {{ forloop.counter0|server_dot }}"></span>
-                                            {{ log.serveur.nom_serveur }}
+                                            {{ log.serveur|server_display_name }}
                                         </span>
                                     </td>
                                     <td><span class="badge badge-{{ log.niveau|niveau_badge }}">{{ log.niveau }}</span></td>
@@ -282,7 +285,7 @@
                                     <select id="analyse_serveur" name="serveur">
                                         <option value="">Tous</option>
                                         {% for serveur in serveurs_disponibles %}
-                                        <option value="{{ serveur.id_serveur }}" {% if log_filters.serveur == serveur.id_serveur|stringformat:"s" %}selected{% endif %}>{{ serveur.nom_serveur }}</option>
+                                        <option value="{{ serveur.id_serveur }}" {% if log_filters.serveur == serveur.id_serveur|stringformat:"s" %}selected{% endif %}>{{ serveur|server_display_name }} ({{ serveur.adresse_ip }})</option>
                                         {% endfor %}
                                     </select>
                                 </div>
@@ -510,7 +513,7 @@
                                     <td><span class="badge badge-nouveau">{{ alerte.statut }}</span></td>
                                     <td>{{ alerte.anomalie.type_anomalie }}</td>
                                     <td>{{ alerte.anomalie.log.source.nom_source }}</td>
-                                    <td>{{ alerte.anomalie.log.serveur.nom_serveur }}</td>
+                                    <td>{{ alerte.anomalie.log.serveur|server_display_name }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -553,7 +556,7 @@
                                     <td>
                                         <span class="server-cell">
                                             <span class="server-dot {{ forloop.counter0|server_dot }}"></span>
-                                            {{ serveur.nom_serveur }}
+                                            {{ serveur|server_display_name }}
                                         </span>
                                     </td>
                                     <td>{{ serveur.adresse_ip }}</td>
