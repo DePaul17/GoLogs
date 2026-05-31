@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.core.cache import cache
 from django.db.models import Q
 from django.shortcuts import redirect, render
 
@@ -27,6 +28,23 @@ from logs.password_reset import (
 SESSION_USER_ID = 'utilisateur_id'
 SESSION_USER_NAME = 'utilisateur_nom'
 SESSION_USER_ROLE = 'utilisateur_role'
+ACCESS_METRICS_CACHE_KEY = 'gologs:access_metrics'
+ACCESS_METRICS_CACHE_TTL = 120
+
+
+def _metrics_from_log_cache(log_content_cache: dict[str, str]) -> dict[str, object]:
+    total_requests = 0
+    total_404 = 0
+    for content in log_content_cache.values():
+        stats = analyze_access_log(content)
+        total_requests += int(stats['total_requests'])
+        total_404 += int(stats['total_404'])
+    incidence_404_pct = round((total_404 / total_requests) * 100, 1) if total_requests else 0.0
+    return {
+        'total_requests': total_requests,
+        'total_404': total_404,
+        'incidence_404_pct': incidence_404_pct,
+    }
 
 
 def _is_authenticated(request):
@@ -220,7 +238,8 @@ def dashboard(request):
                 log_stats_cache[host] = stats
             return log_stats_cache[host]
 
-        filtres_actifs = any([
+        filter_requested = request.GET.get('filtrer') == '1'
+        filtres_actifs = filter_requested or any([
             search_query,
             date_debut,
             date_fin,
@@ -283,24 +302,19 @@ def dashboard(request):
                 )
 
         up_ips = [entry['ip'] for entry in serveurs_en_marche]
-        total_requests = 0
-        total_404 = 0
-        for ip in up_ips:
-            if not get_server_log_config(ip):
-                continue
-            try:
-                stats_host = _load_log_stats(ip)
-            except LogAnalyzerError:
-                continue
-            total_requests += int(stats_host['total_requests'])
-            total_404 += int(stats_host['total_404'])
-
-        incidence_404_pct = round((total_404 / total_requests) * 100, 1) if total_requests else 0.0
-        access_metrics = {
-            'total_requests': total_requests,
-            'total_404': total_404,
-            'incidence_404_pct': incidence_404_pct,
-        }
+        if log_content_cache:
+            access_metrics = _metrics_from_log_cache(log_content_cache)
+            cache.set(
+                ACCESS_METRICS_CACHE_KEY,
+                access_metrics,
+                ACCESS_METRICS_CACHE_TTL,
+            )
+        else:
+            access_metrics = cache.get(ACCESS_METRICS_CACHE_KEY) or {
+                'total_requests': 0,
+                'total_404': 0,
+                'incidence_404_pct': 0.0,
+            }
 
         context['stats'] = {
             'sources': SourceLog.objects.count(),

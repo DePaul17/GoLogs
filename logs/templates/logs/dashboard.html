@@ -101,11 +101,10 @@
                 <div class="card">
                     <div class="card-header">
                         <h3>Filtres globaux</h3>
-                        <a href="{% url 'dashboard' %}" class="card-reset">Réinitialiser</a>
+                        <a href="{% url 'dashboard' %}#activite" class="card-reset">Réinitialiser</a>
                     </div>
                     <div class="card-body">
-                        <form method="get" id="form-activite">
-                            <input type="hidden" name="section" value="activite">
+                        <form method="get" id="form-activite" action="{% url 'dashboard' %}#activite">
                             <div class="filters-row">
                                 <div class="filter-group">
                                     <label for="date_debut">Période — début</label>
@@ -143,7 +142,7 @@
                                 </div>
                                 <div class="filter-group">
                                     <label>&nbsp;</label>
-                                    <button type="submit" class="btn-filter" style="width:100%;justify-content:center;">
+                                    <button type="submit" name="filtrer" value="1" class="btn-filter" style="width:100%;justify-content:center;">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
                                         Filtrer
                                     </button>
@@ -244,7 +243,9 @@
                         </div>
                         {% else %}
                         <div class="empty-state">
-                            {% if filtres_actifs %}
+                            {% if access_logs_error %}
+                            {{ access_logs_error }}
+                            {% elif filtres_actifs %}
                             Aucun log ne correspond à votre recherche.
                             {% else %}
                             Aucun filtre appliqué.
@@ -651,6 +652,12 @@
 
         if (name === 'logs-serveur' && serveurIp) {
             history.replaceState(null, '', '?serveur_ip=' + encodeURIComponent(serveurIp) + '#logs-serveur');
+        } else if (name === 'activite' && params.get('filtrer') === '1') {
+            var qs = location.search || '?filtrer=1';
+            if (qs.indexOf('#') !== -1) {
+                qs = qs.split('#')[0];
+            }
+            history.replaceState(null, '', location.pathname + qs + '#activite');
         } else {
             history.replaceState(null, '', location.pathname + '#' + name);
         }
@@ -665,17 +672,16 @@
     });
 
     var hash = location.hash.replace('#', '');
-    var sectionParam = params.get('section');
-    if (hash === 'serveurs') {
-        showSection('serveurs');
-    } else if (sectionParam === 'activite' || hash === 'activite') {
-        showSection('activite');
-    } else if (hash === 'logs-serveur' || serveurIp) {
+    if (hash === 'logs-serveur') {
         showSection('logs-serveur');
+    } else if (hash === 'serveurs') {
+        showSection('serveurs');
+    } else if (params.get('filtrer') === '1') {
+        showSection('activite');
     } else if (hash && document.getElementById('section-' + hash)) {
         showSection(hash);
     } else {
-        toggleFab('activite');
+        showSection('activite');
     }
 })();
 </script>

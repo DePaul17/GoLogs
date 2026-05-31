@@ -14,8 +14,8 @@ COMBINED_LOG_RE = re.compile(
     r'(?P<ip>\S+) '
     r'\S+ \S+ '
     r'\[(?P<timestamp>[^\]]+)\] '
-    r'"(?P<method>[A-Z]+) (?P<url>\S+) HTTP/[\d.]+" '
-    r'(?P<status>\d{3}) '
+    r'"(?P<method>[A-Z]+) (?P<url>\S+)(?: HTTP/[\d.]+)?" '
+    r'(?P<status>\d{3}|-) '
     r'(?P<bytes>\S+)'
 )
 
@@ -82,7 +82,11 @@ def fetch_remote_log_content(host_ip: str, log_path: str | None = None) -> str:
 
     try:
         client.connect(**kw)
-        _, stdout, stderr = client.exec_command(f'cat {shlex.quote(path)}')
+        cmd = (
+            f'tail -n 10000 {shlex.quote(path)} 2>/dev/null '
+            f'|| cat {shlex.quote(path)}'
+        )
+        _, stdout, stderr = client.exec_command(cmd)
         exit_code = stdout.channel.recv_exit_status()
         out = stdout.read().decode(errors='replace')
         err = stderr.read().decode(errors='replace').strip()
@@ -164,6 +168,8 @@ def _parse_filter_date(value: str) -> date | None:
 def _matches_type_log(status: str, type_log: str) -> bool:
     if not type_log:
         return True
+    if status == '-':
+        return type_log == 'erreur'
     code = int(status)
     if type_log == 'erreur':
         return code >= 400
@@ -254,10 +260,16 @@ def fetch_filtered_access_logs(
         keyword=keyword,
         type_log=type_log,
     )
-    error_msg = ' | '.join(errors) if errors and not display else None
-    if errors and display:
-        error_msg = None
-    elif errors and not display and len(errors) == len([h for h in hosts if get_server_log_config(h[0])]):
+    error_msg = None
+    if errors and not display:
+        configured = [h for h in hosts if get_server_log_config(h[0])]
+        if len(errors) >= len(configured):
+            error_msg = errors[0]
+    elif not display and not all_entries:
+        error_msg = 'Journal vide ou format de log non reconnu sur le serveur.'
+    elif errors and display:
+        pass
+    elif errors:
         error_msg = errors[0]
     return display, top_pages, total, error_msg
 
