@@ -271,6 +271,12 @@ def dashboard(request):
     return render(request, 'logs/dashboard.html', context)
 
 
+def servers_view(request):
+    if not _is_authenticated(request):
+        return redirect('login')
+    return redirect('/dashboard/#serveurs')
+
+
 def log_stats(request):
     if not _is_authenticated(request):
         return redirect('login')
