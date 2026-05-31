@@ -228,6 +228,8 @@ def dashboard(request):
             filtre_serveur,
         ])
         access_logs_filtres: list[dict] = []
+        access_pages_top: list[dict] = []
+        access_logs_total = 0
         access_logs_error = None
 
         if filtres_actifs:
@@ -244,7 +246,12 @@ def dashboard(request):
                     'Aucun serveur UP avec journal web disponible pour le filtrage.'
                 )
             else:
-                access_logs_filtres, access_logs_error = fetch_filtered_access_logs(
+                (
+                    access_logs_filtres,
+                    access_pages_top,
+                    access_logs_total,
+                    access_logs_error,
+                ) = fetch_filtered_access_logs(
                     host_targets,
                     date_debut=date_debut,
                     date_fin=date_fin,
@@ -367,6 +374,8 @@ def dashboard(request):
         context['serveur_logs_error'] = serveur_logs_error
         context['search_terms'] = search_terms
         context['access_logs_filtres'] = access_logs_filtres
+        context['access_pages_top'] = access_pages_top
+        context['access_logs_total'] = access_logs_total
         context['access_logs_error'] = access_logs_error
         context['log_filters'] = {
             'q': search_query,
@@ -378,7 +387,7 @@ def dashboard(request):
             'date_debut': date_debut,
             'date_fin': date_fin,
         }
-        context['logs_filtres_count'] = len(access_logs_filtres)
+        context['logs_filtres_count'] = access_logs_total
         context['filtres_actifs'] = filtres_actifs
 
     return render(request, 'logs/dashboard.html', context)

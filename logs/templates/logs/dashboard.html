@@ -150,30 +150,6 @@
                                 </div>
                             </div>
 
-                            <details class="filters-advanced" {% if log_filters.service or log_filters.source %}open{% endif %}>
-                                <summary>Filtres avancés</summary>
-                                <div class="advanced-filters-grid">
-                                    <div class="filter-group">
-                                        <label for="service">Service</label>
-                                        <select id="service" name="service">
-                                            <option value="">Tous</option>
-                                            {% for service in services_disponibles %}
-                                            <option value="{{ service }}" {% if log_filters.service == service %}selected{% endif %}>{{ service }}</option>
-                                            {% endfor %}
-                                        </select>
-                                    </div>
-                                    <div class="filter-group">
-                                        <label for="source">Source</label>
-                                        <select id="source" name="source">
-                                            <option value="">Toutes</option>
-                                            {% for source in sources_disponibles %}
-                                            <option value="{{ source.id_source }}" {% if log_filters.source == source.id_source|stringformat:"s" %}selected{% endif %}>{{ source.nom_source }}</option>
-                                            {% endfor %}
-                                        </select>
-                                    </div>
-                                </div>
-                            </details>
-
                             {% if search_terms %}
                             <div class="search-terms">
                                 {% for term in search_terms %}
@@ -189,7 +165,41 @@
                     </div>
                 </div>
 
+                {% if access_pages_top %}
+                <div class="card" style="margin-bottom: 1rem;">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title-lg">Pages les plus visitées</div>
+                            <div class="card-subtitle">{{ logs_filtres_count }} appel(s) au total · classement par nombre d'accès</div>
+                        </div>
+                    </div>
+                    <div class="data-table-wrap">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Page (URL)</th>
+                                    <th>Nombre d'appels</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for page in access_pages_top %}
+                                <tr>
+                                    <td>{{ forloop.counter }}</td>
+                                    <td class="message-cell" title="{{ page.url }}"><code>{{ page.url }}</code></td>
+                                    <td><strong>{{ page.hits }}</strong></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endif %}
+
                 <div class="card">
+                    <div class="card-header">
+                        <div class="card-title-lg">Détail des requêtes</div>
+                    </div>
                     <div class="data-table-wrap">
                         {% if access_logs_error %}
                         <div class="empty-state server-logs-error">{{ access_logs_error }}</div>
@@ -228,7 +238,9 @@
                             </tbody>
                         </table>
                         <div class="pagination">
-                            <span class="pagination-info">{{ logs_filtres_count }} entrée(s) affichée(s)</span>
+                            <span class="pagination-info">
+                                {{ access_logs_filtres|length }} affichée(s) sur {{ logs_filtres_count }} entrée(s)
+                            </span>
                         </div>
                         {% else %}
                         <div class="empty-state">

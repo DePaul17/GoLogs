@@ -179,8 +179,8 @@ def filter_access_entries(
     date_fin: str = '',
     keyword: str = '',
     type_log: str = '',
-) -> list[dict[str, object]]:
-    """Filtre les entrées access.log selon période, type et mot-clé (URL)."""
+) -> tuple[list[dict[str, object]], list[dict[str, object]], int]:
+    """Filtre les entrées access.log ; retourne (aperçu, top pages, total)."""
     start = _parse_filter_date(date_debut)
     end = _parse_filter_date(date_fin)
     terms = [t.strip().lower() for t in keyword.split() if t.strip()]
@@ -204,9 +204,18 @@ def filter_access_entries(
         key=lambda item: item['datetime'].timestamp() if isinstance(item.get('datetime'), datetime) else 0,
         reverse=True,
     )
-    for entry in filtered[:FILTER_LIMIT]:
+
+    page_hits = Counter(str(entry['url']) for entry in filtered)
+    top_pages = [
+        {'url': url, 'hits': hits}
+        for url, hits in page_hits.most_common(TOP_LIMIT)
+    ]
+    total = len(filtered)
+
+    display = filtered[:FILTER_LIMIT]
+    for entry in display:
         entry.pop('datetime', None)
-    return filtered[:FILTER_LIMIT]
+    return display, top_pages, total
 
 
 def fetch_filtered_access_logs(
@@ -217,10 +226,10 @@ def fetch_filtered_access_logs(
     keyword: str = '',
     type_log: str = '',
     content_cache: dict[str, str] | None = None,
-) -> tuple[list[dict[str, object]], str | None]:
+) -> tuple[list[dict[str, object]], list[dict[str, object]], int, str | None]:
     """
     Lit les access.log distants et applique les filtres.
-    hosts : [(ip, nom_affiché), ...]
+    Retourne (entrées affichées, top pages, total filtré, erreur).
     """
     cache = content_cache if content_cache is not None else {}
     all_entries: list[dict[str, object]] = []
@@ -238,19 +247,19 @@ def fetch_filtered_access_logs(
         except LogAnalyzerError as exc:
             errors.append(f'{host_name} ({host_ip}) : {exc}')
 
-    filtered = filter_access_entries(
+    display, top_pages, total = filter_access_entries(
         all_entries,
         date_debut=date_debut,
         date_fin=date_fin,
         keyword=keyword,
         type_log=type_log,
     )
-    error_msg = ' | '.join(errors) if errors and not filtered else None
-    if errors and filtered:
+    error_msg = ' | '.join(errors) if errors and not display else None
+    if errors and display:
         error_msg = None
-    elif errors and not filtered and len(errors) == len([h for h in hosts if get_server_log_config(h[0])]):
+    elif errors and not display and len(errors) == len([h for h in hosts if get_server_log_config(h[0])]):
         error_msg = errors[0]
-    return filtered, error_msg
+    return display, top_pages, total, error_msg
 
 
 def analyze_access_log(content: str) -> dict[str, object]:
