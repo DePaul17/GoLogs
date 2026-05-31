@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 import shlex
 from collections import Counter
-from datetime import datetime
+from datetime import date, datetime
 
 import paramiko
 from django.conf import settings
@@ -21,6 +21,7 @@ COMBINED_LOG_RE = re.compile(
 
 TOP_LIMIT = 20
 RECENT_LIMIT = 50
+FILTER_LIMIT = 100
 
 
 class LogAnalyzerError(RuntimeError):
@@ -124,6 +125,132 @@ def parse_combined_log_line(line: str) -> dict[str, object] | None:
     data['date_display'] = dt.strftime('%d/%m/%Y') if dt else '—'
     data['time_display'] = dt.strftime('%H:%M:%S') if dt else '—'
     return data
+
+
+def parse_access_log_entries(
+    content: str,
+    host_ip: str,
+    host_name: str,
+) -> list[dict[str, object]]:
+    """Transforme le contenu brut en entrées structurées."""
+    entries: list[dict[str, object]] = []
+    for line in content.splitlines():
+        parsed = parse_combined_log_line(line)
+        if parsed is None:
+            continue
+        entries.append({
+            'host_ip': host_ip,
+            'host_name': host_name,
+            'date': parsed['date_display'],
+            'time': parsed['time_display'],
+            'datetime': parsed['datetime'],
+            'url': str(parsed['url']),
+            'status': str(parsed['status']),
+            'ip': str(parsed['ip']),
+            'method': str(parsed['method']),
+        })
+    return entries
+
+
+def _parse_filter_date(value: str) -> date | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, '%Y-%m-%d').date()
+    except ValueError:
+        return None
+
+
+def _matches_type_log(status: str, type_log: str) -> bool:
+    if not type_log:
+        return True
+    code = int(status)
+    if type_log == 'erreur':
+        return code >= 400
+    if type_log == 'normal':
+        return code < 400
+    return True
+
+
+def filter_access_entries(
+    entries: list[dict[str, object]],
+    *,
+    date_debut: str = '',
+    date_fin: str = '',
+    keyword: str = '',
+    type_log: str = '',
+) -> list[dict[str, object]]:
+    """Filtre les entrées access.log selon période, type et mot-clé (URL)."""
+    start = _parse_filter_date(date_debut)
+    end = _parse_filter_date(date_fin)
+    terms = [t.strip().lower() for t in keyword.split() if t.strip()]
+    filtered: list[dict[str, object]] = []
+
+    for entry in entries:
+        dt = entry.get('datetime')
+        if start and isinstance(dt, datetime) and dt.date() < start:
+            continue
+        if end and isinstance(dt, datetime) and dt.date() > end:
+            continue
+        if not _matches_type_log(str(entry['status']), type_log):
+            continue
+        if terms:
+            url_lower = str(entry['url']).lower()
+            if not all(term in url_lower for term in terms):
+                continue
+        filtered.append(entry)
+
+    filtered.sort(
+        key=lambda item: item['datetime'].timestamp() if isinstance(item.get('datetime'), datetime) else 0,
+        reverse=True,
+    )
+    for entry in filtered[:FILTER_LIMIT]:
+        entry.pop('datetime', None)
+    return filtered[:FILTER_LIMIT]
+
+
+def fetch_filtered_access_logs(
+    hosts: list[tuple[str, str]],
+    *,
+    date_debut: str = '',
+    date_fin: str = '',
+    keyword: str = '',
+    type_log: str = '',
+    content_cache: dict[str, str] | None = None,
+) -> tuple[list[dict[str, object]], str | None]:
+    """
+    Lit les access.log distants et applique les filtres.
+    hosts : [(ip, nom_affiché), ...]
+    """
+    cache = content_cache if content_cache is not None else {}
+    all_entries: list[dict[str, object]] = []
+    errors: list[str] = []
+
+    for host_ip, host_name in hosts:
+        if not get_server_log_config(host_ip):
+            continue
+        try:
+            if host_ip not in cache:
+                cache[host_ip] = fetch_remote_log_content(host_ip)
+            all_entries.extend(
+                parse_access_log_entries(cache[host_ip], host_ip, host_name),
+            )
+        except LogAnalyzerError as exc:
+            errors.append(f'{host_name} ({host_ip}) : {exc}')
+
+    filtered = filter_access_entries(
+        all_entries,
+        date_debut=date_debut,
+        date_fin=date_fin,
+        keyword=keyword,
+        type_log=type_log,
+    )
+    error_msg = ' | '.join(errors) if errors and not filtered else None
+    if errors and filtered:
+        error_msg = None
+    elif errors and not filtered and len(errors) == len([h for h in hosts if get_server_log_config(h[0])]):
+        error_msg = errors[0]
+    return filtered, error_msg
 
 
 def analyze_access_log(content: str) -> dict[str, object]:

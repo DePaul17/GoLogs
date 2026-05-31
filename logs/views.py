@@ -11,7 +11,9 @@ from logs.network_probe import (
 )
 from logs.services.log_analyzer import (
     LogAnalyzerError,
-    get_log_statistics_for_host,
+    analyze_access_log,
+    fetch_filtered_access_logs,
+    fetch_remote_log_content,
     get_server_log_config,
 )
 from logs.models import Alerte, Anomalie, LogEntree, Rapport, SourceLog, Serveur, Utilisateur
@@ -167,7 +169,8 @@ def dashboard(request):
         filtered_alertes = alertes_queryset.order_by('-date_alerte')[:100]
 
         search_query = request.GET.get('q', '').strip()
-        niveau_filter = request.GET.get('niveau', '').strip()
+        type_log = request.GET.get('type_log', '').strip()
+        filtre_serveur = request.GET.get('filtre_serveur', '').strip()
         service_filter = request.GET.get('service', '').strip()
         source_filter = request.GET.get('source', '').strip()
         serveur_filter = request.GET.get('serveur', '').strip()
@@ -178,8 +181,6 @@ def dashboard(request):
         search_terms = parse_search_terms(search_query)
         if search_terms:
             logs_queryset = apply_log_search(logs_queryset, search_query)
-        if niveau_filter:
-            logs_queryset = logs_queryset.filter(niveau__iexact=niveau_filter)
         if service_filter:
             logs_queryset = logs_queryset.filter(service__iexact=service_filter)
         if source_filter:
@@ -199,12 +200,58 @@ def dashboard(request):
         serveur_logs = None
         serveur_logs_error = None
         serveur_actif = None
+        log_content_cache: dict[str, str] = {}
         log_stats_cache: dict[str, dict] = {}
+
+        def _load_log_content(host: str) -> str:
+            if host not in log_content_cache:
+                log_content_cache[host] = fetch_remote_log_content(host)
+            return log_content_cache[host]
 
         def _load_log_stats(host: str) -> dict:
             if host not in log_stats_cache:
-                log_stats_cache[host] = get_log_statistics_for_host(host)
+                stats = analyze_access_log(_load_log_content(host))
+                config = get_server_log_config(host)
+                stats['log_file'] = (
+                    config.get('log_file_path', '/var/log/apache2/access.log')
+                    if config else ''
+                )
+                stats['host'] = host
+                log_stats_cache[host] = stats
             return log_stats_cache[host]
+
+        filtres_actifs = any([
+            search_query,
+            date_debut,
+            date_fin,
+            type_log,
+            filtre_serveur,
+        ])
+        access_logs_filtres: list[dict] = []
+        access_logs_error = None
+
+        if filtres_actifs:
+            if filtre_serveur:
+                host_targets = [(filtre_serveur, resolve_server_name(filtre_serveur))]
+            else:
+                host_targets = [
+                    (entry['ip'], entry['nom'])
+                    for entry in serveurs_en_marche
+                    if get_server_log_config(entry['ip'])
+                ]
+            if not host_targets:
+                access_logs_error = (
+                    'Aucun serveur UP avec journal web disponible pour le filtrage.'
+                )
+            else:
+                access_logs_filtres, access_logs_error = fetch_filtered_access_logs(
+                    host_targets,
+                    date_debut=date_debut,
+                    date_fin=date_fin,
+                    keyword=search_query,
+                    type_log=type_log,
+                    content_cache=log_content_cache,
+                )
 
         if serveur_ip:
             serveur_actif = {
@@ -309,33 +356,30 @@ def dashboard(request):
         context['sources_disponibles'] = SourceLog.objects.order_by('nom_source')
         context['serveurs_disponibles'] = Serveur.objects.order_by('nom_serveur')
         context['serveurs_en_marche'] = serveurs_en_marche
+        context['serveurs_log_disponibles'] = [
+            entry for entry in serveurs_en_marche
+            if get_server_log_config(entry['ip'])
+        ]
         context['tous_les_serveurs'] = tous_les_serveurs
         context['serveur_ip'] = serveur_ip
         context['serveur_actif'] = serveur_actif
         context['serveur_logs'] = serveur_logs
         context['serveur_logs_error'] = serveur_logs_error
         context['search_terms'] = search_terms
+        context['access_logs_filtres'] = access_logs_filtres
+        context['access_logs_error'] = access_logs_error
         context['log_filters'] = {
             'q': search_query,
-            'niveau': niveau_filter,
+            'type_log': type_log,
+            'filtre_serveur': filtre_serveur,
             'service': service_filter,
             'source': source_filter,
             'serveur': serveur_filter,
             'date_debut': date_debut,
             'date_fin': date_fin,
         }
-        context['logs_filtres_count'] = logs_queryset.count()
-        context['filtres_actifs'] = any(
-            [
-                search_query,
-                niveau_filter,
-                service_filter,
-                source_filter,
-                serveur_filter,
-                date_debut,
-                date_fin,
-            ]
-        )
+        context['logs_filtres_count'] = len(access_logs_filtres)
+        context['filtres_actifs'] = filtres_actifs
 
     return render(request, 'logs/dashboard.html', context)
 

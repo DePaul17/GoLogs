@@ -105,6 +105,7 @@
                     </div>
                     <div class="card-body">
                         <form method="get" id="form-activite">
+                            <input type="hidden" name="section" value="activite">
                             <div class="filters-row">
                                 <div class="filter-group">
                                     <label for="date_debut">Période — début</label>
@@ -115,30 +116,29 @@
                                     <input type="date" id="date_fin" name="date_fin" value="{{ log_filters.date_fin }}">
                                 </div>
                                 <div class="filter-group">
-                                    <label for="serveur">Serveur d'origine</label>
-                                    <select id="serveur" name="serveur">
-                                        <option value="">Tous les serveurs</option>
-                                        {% for serveur in serveurs_disponibles %}
-                                        <option value="{{ serveur.id_serveur }}" {% if log_filters.serveur == serveur.id_serveur|stringformat:"s" %}selected{% endif %}>{{ serveur|server_display_name }} ({{ serveur.adresse_ip }})</option>
+                                    <label for="filtre_serveur">Serveur</label>
+                                    <select id="filtre_serveur" name="filtre_serveur">
+                                        <option value="">Tous les serveurs UP</option>
+                                        {% for entry in serveurs_log_disponibles %}
+                                        <option value="{{ entry.ip }}" {% if log_filters.filtre_serveur == entry.ip %}selected{% endif %}>{{ entry.nom }} ({{ entry.ip }})</option>
                                         {% endfor %}
                                     </select>
                                 </div>
                                 <div class="filter-group">
-                                    <label for="niveau">Type de log</label>
-                                    <select id="niveau" name="niveau">
+                                    <label for="type_log">Type de log</label>
+                                    <select id="type_log" name="type_log">
                                         <option value="">Tous les types</option>
-                                        {% for niveau in niveaux_disponibles %}
-                                        <option value="{{ niveau }}" {% if log_filters.niveau == niveau %}selected{% endif %}>{{ niveau }}</option>
-                                        {% endfor %}
+                                        <option value="normal" {% if log_filters.type_log == "normal" %}selected{% endif %}>Pages normales (2xx/3xx)</option>
+                                        <option value="erreur" {% if log_filters.type_log == "erreur" %}selected{% endif %}>Erreurs (4xx/5xx)</option>
                                     </select>
                                 </div>
                             </div>
                             <div class="filters-row" style="margin-top:1rem;">
                                 <div class="filter-group" style="grid-column: span 3;">
-                                    <label for="q">Recherche par mot-clé</label>
+                                    <label for="q">Recherche par mot-clé (nom de page)</label>
                                     <div class="search-input-wrap">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-                                        <input type="search" id="q" name="q" value="{{ log_filters.q }}" placeholder="Rechercher…">
+                                        <input type="search" id="q" name="q" value="{{ log_filters.q }}" placeholder="panier, connexion, index…">
                                     </div>
                                 </div>
                                 <div class="filter-group">
@@ -191,48 +191,51 @@
 
                 <div class="card">
                     <div class="data-table-wrap">
-                        {% if derniers_logs %}
+                        {% if access_logs_error %}
+                        <div class="empty-state server-logs-error">{{ access_logs_error }}</div>
+                        {% elif access_logs_filtres %}
                         <table class="data-table">
                             <thead>
                                 <tr>
-                                    <th>Horodatage</th>
+                                    <th>Date</th>
+                                    <th>Heure</th>
                                     <th>Serveur</th>
-                                    <th>Type</th>
-                                    <th>Service</th>
-                                    <th>Message</th>
-                                    <th>Statut</th>
+                                    <th>Page</th>
+                                    <th>Code</th>
+                                    <th>IP visiteur</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for log in derniers_logs %}
+                                {% for log in access_logs_filtres %}
                                 <tr>
-                                    <td>{{ log.horodatage|date:"d/m/Y H:i:s" }}</td>
+                                    <td>{{ log.date }}</td>
+                                    <td>{{ log.time }}</td>
                                     <td>
                                         <span class="server-cell">
                                             <span class="server-dot {{ forloop.counter0|server_dot }}"></span>
-                                            {{ log.serveur|server_display_name }}
+                                            {{ log.host_name }}
                                         </span>
                                     </td>
-                                    <td><span class="badge badge-{{ log.niveau|niveau_badge }}">{{ log.niveau }}</span></td>
-                                    <td><span class="component-pill">{{ log.service|default:"—" }}</span></td>
-                                    <td class="message-cell" title="{{ log.message }}">{{ log.message }}</td>
-                                    <td><span class="badge badge-{% if log.statut_traitement == 'NOUVEAU' %}nouveau{% else %}ok{% endif %}">{{ log.statut_traitement|default:"TRAITÉ" }}</span></td>
+                                    <td class="message-cell" title="{{ log.url }}"><code>{{ log.url }}</code></td>
+                                    <td>
+                                        <span class="badge badge-{% if log.status == '200' %}ok{% elif log.status == '404' %}warn{% elif log.status == '500' or log.status == '502' or log.status == '503' %}error{% else %}info{% endif %}">
+                                            {{ log.status }}
+                                        </span>
+                                    </td>
+                                    <td>{{ log.ip }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                         <div class="pagination">
-                            <span class="pagination-info">Page 1 — {{ logs_filtres_count }} entrée(s)</span>
-                            <div class="pagination-pages">
-                                <button class="page-btn active" type="button">1</button>
-                            </div>
+                            <span class="pagination-info">{{ logs_filtres_count }} entrée(s) affichée(s)</span>
                         </div>
                         {% else %}
                         <div class="empty-state">
                             {% if filtres_actifs %}
                             Aucun log ne correspond à votre recherche.
                             {% else %}
-                            Aucun log importé. Lancez <code>python manage.py seed_demo</code>.
+                            Aucun filtre appliqué.
                             {% endif %}
                         </div>
                         {% endif %}
@@ -604,7 +607,7 @@
 <script>
 (function () {
     var titles = {
-        activite: "Historique de l'activité — Tous les serveurs",
+        activite: "Historique de l'activité - Tous les serveurs",
         analyse: "Analyse Approfondie – Logs",
         alertes: "Alertes & Anomalies",
         serveurs: "Serveurs monitorés",
@@ -650,8 +653,11 @@
     });
 
     var hash = location.hash.replace('#', '');
+    var sectionParam = params.get('section');
     if (hash === 'serveurs') {
         showSection('serveurs');
+    } else if (sectionParam === 'activite' || hash === 'activite') {
+        showSection('activite');
     } else if (hash === 'logs-serveur' || serveurIp) {
         showSection('logs-serveur');
     } else if (hash && document.getElementById('section-' + hash)) {
