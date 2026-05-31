@@ -72,3 +72,52 @@ def list_running_monitored_servers() -> list[dict]:
             'label': f'{nom} ({ip})',
         })
     return running
+
+
+def list_all_monitored_servers() -> list[dict]:
+    """
+    Liste tous les serveurs configurés avec leur état UP/DOWN.
+    Chaque entrée : {ip, nom, serveur, up, label}.
+    """
+    ips = getattr(
+        settings,
+        'MONITORED_SERVER_IPS',
+        ['192.168.1.10', '192.168.1.11', '192.168.1.12'],
+    )
+    port = int(getattr(settings, 'NETWORK_PROBE_SSH_PORT', 22))
+    timeout = float(getattr(settings, 'NETWORK_PROBE_TIMEOUT_SEC', 1.2))
+    parallelism = int(getattr(settings, 'NETWORK_PROBE_PARALLELISM', 8))
+
+    if not ips:
+        return []
+
+    db_by_ip = {
+        s.adresse_ip: s
+        for s in Serveur.objects.filter(adresse_ip__in=ips)
+    }
+
+    worker_count = max(1, min(parallelism, len(ips)))
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        reachable_flags = list(
+            executor.map(lambda ip_: ping_ip(ip_, port, timeout), ips),
+        )
+
+    servers: list[dict] = []
+    for ip, reachable in zip(ips, reachable_flags):
+        serveur = db_by_ip.get(ip)
+        nom = resolve_server_name(
+            ip,
+            serveur.nom_serveur if serveur else None,
+        )
+        servers.append({
+            'ip': ip,
+            'nom': nom,
+            'serveur': serveur,
+            'up': reachable,
+            'label': f'{nom} ({ip})',
+            'systeme_exploitation': (
+                serveur.systeme_exploitation if serveur else None
+            ),
+            'localisation': serveur.localisation if serveur else None,
+        })
+    return servers

@@ -171,10 +171,19 @@ MONITORED_SERVER_NAMES = {
     '192.168.1.12': 'Open source',
 }
 
-# Lecture des logs Apache/Nginx sur la VM Site témoin (SSH)
+# Lecture des logs Apache/Nginx — configuration par serveur (IP)
 LOG_HOST_IP = os.environ.get('LOG_HOST_IP', '192.168.1.11')
 LOG_HOST_USER = os.environ.get('LOG_HOST_USER', 'iris')
 LOG_HOST_PASSWORD = os.environ.get('LOG_HOST_PASSWORD', 'iris')
 LOG_FILE_PATH = os.environ.get('LOG_FILE_PATH', '/var/log/apache2/access.log')
 LOG_HOST_SSH_PORT = int(os.environ.get('LOG_HOST_SSH_PORT', '22'))
 LOG_SSH_CONNECT_TIMEOUT_SEC = int(os.environ.get('LOG_SSH_CONNECT_TIMEOUT_SEC', '15'))
+
+SERVER_LOG_CONFIG = {
+    '192.168.1.11': {
+        'ssh_user': LOG_HOST_USER,
+        'ssh_password': LOG_HOST_PASSWORD,
+        'log_file_path': LOG_FILE_PATH,
+        'ssh_port': LOG_HOST_SSH_PORT,
+    },
+}

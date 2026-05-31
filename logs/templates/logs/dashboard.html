@@ -34,7 +34,7 @@
             </button>
             <div class="nav-submenu" id="submenu-serveurs">
                 {% for entry in serveurs_en_marche %}
-                <a href="{% if entry.serveur %}?serveur={{ entry.serveur.id_serveur }}#activite{% else %}#{% endif %}" class="nav-submenu-server">
+                <a href="?serveur_ip={{ entry.ip }}#logs-serveur" class="nav-submenu-server{% if serveur_ip == entry.ip %} is-active{% endif %}">
                     <span class="nav-submenu-line">
                         <span class="nav-submenu-name">{{ entry.nom }}</span>
                         <span class="nav-submenu-ip">{{ entry.ip }}</span>
@@ -247,11 +247,11 @@
 
                 <div class="widgets-row">
                     <div class="widget widget-dark">
-                        <div class="widget-label">Taux d'incidents</div>
-                        <div class="widget-value">{% if stats.logs %}{% widthratio stats.anomalies stats.logs 100 %}%{% else %}0%{% endif %}</div>
+                        <div class="widget-label">Taux d'incidence</div>
+                        <div class="widget-value">{{ stats.incidence_404_pct }}%</div>
                         <div class="widget-sub">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
-                            {{ stats.anomalies }} anomalie(s) détectée(s)
+                            {{ stats.total_404 }} erreur(s) 404
                         </div>
                         <svg class="widget-icon-bg" width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
                     </div>
@@ -268,12 +268,17 @@
                     <div class="widget widget-light">
                         <div class="widget-label">Volume de logs</div>
                         <div class="widget-value">{{ stats.logs }}</div>
-                        <div class="widget-sub">entrées en base</div>
+                        <div class="widget-sub">requêtes HTTP analysées</div>
                         <div class="progress-bar">
                             <div class="progress-bar-fill" style="width: {% if stats.logs %}{% widthratio stats.logs 1000 100 %}%{% else %}0%{% endif %}; max-width:100%"></div>
                         </div>
                     </div>
                 </div>
+            </div>
+
+            {# ── Section Logs serveur (Apache access.log via SSH) ── #}
+            <div class="dashboard-section" id="section-logs-serveur">
+                {% include "logs/_server_logs_section.html" %}
             </div>
 
             {# ── Section Analyse (maquette 3) ── #}
@@ -538,10 +543,13 @@
             <div class="dashboard-section" id="section-serveurs">
                 <div class="card">
                     <div class="card-header">
-                        <div class="card-title-lg">Serveurs monitorés</div>
+                        <div>
+                            <div class="card-title-lg">Serveurs monitorés</div>
+                            <div class="card-subtitle">{{ tous_les_serveurs|length }} serveur(s) configuré(s)</div>
+                        </div>
                     </div>
                     <div class="data-table-wrap">
-                        {% if serveurs_disponibles %}
+                        {% if tous_les_serveurs %}
                         <table class="data-table">
                             <thead>
                                 <tr>
@@ -549,30 +557,42 @@
                                     <th>Adresse IP</th>
                                     <th>Système</th>
                                     <th>Localisation</th>
-                                    <th>Statut</th>
+                                    <th>État</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for serveur in serveurs_disponibles %}
+                                {% for entry in tous_les_serveurs %}
                                 <tr>
                                     <td>
                                         <span class="server-cell">
                                             <span class="server-dot {{ forloop.counter0|server_dot }}"></span>
-                                            {{ serveur|server_display_name }}
+                                            {{ entry.nom }}
                                         </span>
                                     </td>
-                                    <td>{{ serveur.adresse_ip }}</td>
-                                    <td>{{ serveur.systeme_exploitation|default:"—" }}</td>
-                                    <td>{{ serveur.localisation|default:"—" }}</td>
-                                    <td><span class="badge badge-ok">{{ serveur.statut|default:"ACTIF" }}</span></td>
-                                    <td><a href="?serveur={{ serveur.id_serveur }}#activite" class="card-reset">Voir les logs</a></td>
+                                    <td>{{ entry.ip }}</td>
+                                    <td>{{ entry.systeme_exploitation|default:"—" }}</td>
+                                    <td>{{ entry.localisation|default:"—" }}</td>
+                                    <td>
+                                        {% if entry.up %}
+                                        <span class="badge badge-ok">UP</span>
+                                        {% else %}
+                                        <span class="badge badge-warn">DOWN</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if entry.up %}
+                                        <a href="?serveur_ip={{ entry.ip }}#logs-serveur" class="card-reset">Voir les logs</a>
+                                        {% else %}
+                                        <span class="text-muted">Indisponible</span>
+                                        {% endif %}
+                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
                         </table>
                         {% else %}
-                        <div class="empty-state">Aucun serveur enregistré.</div>
+                        <div class="empty-state">Aucun serveur configuré.</div>
                         {% endif %}
                     </div>
                 </div>
@@ -593,8 +613,12 @@
         activite: "Historique de l'activité — Tous les serveurs",
         analyse: "Analyse Approfondie – Logs",
         alertes: "Alertes & Anomalies",
-        serveurs: "Serveurs monitorés"
+        serveurs: "Serveurs monitorés",
+        "logs-serveur": "Logs — {{ serveur_actif.nom|default:'Serveur'|escapejs }}"
     };
+
+    var params = new URLSearchParams(location.search);
+    var serveurIp = params.get('serveur_ip');
 
     function showSection(name) {
         document.querySelectorAll('.dashboard-section').forEach(function (el) {
@@ -610,7 +634,11 @@
         var titleEl = document.getElementById('page-title');
         if (titleEl && titles[name]) titleEl.textContent = titles[name];
 
-        history.replaceState(null, '', '#' + name);
+        if (name === 'logs-serveur' && serveurIp) {
+            history.replaceState(null, '', '?serveur_ip=' + encodeURIComponent(serveurIp) + '#logs-serveur');
+        } else {
+            history.replaceState(null, '', location.pathname + '#' + name);
+        }
     }
 
     document.querySelectorAll('.nav-item[data-section]').forEach(function (btn) {
@@ -620,7 +648,11 @@
     });
 
     var hash = location.hash.replace('#', '');
-    if (hash && document.getElementById('section-' + hash)) {
+    if (hash === 'serveurs') {
+        showSection('serveurs');
+    } else if (hash === 'logs-serveur' || serveurIp) {
+        showSection('logs-serveur');
+    } else if (hash && document.getElementById('section-' + hash)) {
         showSection(hash);
     }
 })();

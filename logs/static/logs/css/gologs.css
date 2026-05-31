@@ -504,6 +504,51 @@ button, input, select { font-family: inherit; }
 .nav-submenu a:hover .nav-submenu-ip { color: rgba(255, 255, 255, 0.65); }
 .nav-submenu a:hover .nav-submenu-status { color: #6ee7b7; }
 
+.nav-submenu-server.is-active {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.nav-submenu-server.is-active .nav-submenu-name {
+    color: var(--white);
+}
+
+.server-logs-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.server-logs-title {
+    margin: 0 0 0.35rem;
+    font-size: 1.35rem;
+    color: var(--gray-900);
+}
+
+.server-logs-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    color: var(--gray-500);
+    font-size: 0.9rem;
+}
+
+.server-logs-error {
+    color: #c62828;
+}
+
+.text-muted {
+    color: var(--gray-400);
+    font-size: 0.85rem;
+}
+
+#section-logs-serveur .analysis-widgets {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
 .sidebar-logout {
     padding: 1rem 0.75rem 1.25rem;
     border-top: 1px solid rgba(255, 255, 255, 0.08);

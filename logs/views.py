@@ -5,8 +5,15 @@ from django.shortcuts import redirect, render
 from logs.auth import authenticate_user
 from logs.registration import register_user
 from logs.log_search import apply_log_search, parse_search_terms
-from logs.network_probe import list_running_monitored_servers
-from logs.services.log_analyzer import LogAnalyzerError, get_log_statistics
+from logs.network_probe import (
+    list_all_monitored_servers,
+    resolve_server_name,
+)
+from logs.services.log_analyzer import (
+    LogAnalyzerError,
+    get_log_statistics_for_host,
+    get_server_log_config,
+)
 from logs.models import Alerte, Anomalie, LogEntree, Rapport, SourceLog, Serveur, Utilisateur
 from logs.password_reset import (
     parse_reset_token,
@@ -186,10 +193,67 @@ def dashboard(request):
 
         filtered_logs = logs_queryset.order_by('-horodatage')[:100]
 
+        tous_les_serveurs = list_all_monitored_servers()
+        serveurs_en_marche = [entry for entry in tous_les_serveurs if entry['up']]
+        serveur_ip = request.GET.get('serveur_ip', '').strip()
+        serveur_logs = None
+        serveur_logs_error = None
+        serveur_actif = None
+        log_stats_cache: dict[str, dict] = {}
+
+        def _load_log_stats(host: str) -> dict:
+            if host not in log_stats_cache:
+                log_stats_cache[host] = get_log_statistics_for_host(host)
+            return log_stats_cache[host]
+
+        if serveur_ip:
+            serveur_actif = {
+                'ip': serveur_ip,
+                'nom': resolve_server_name(serveur_ip),
+            }
+            for entry in tous_les_serveurs:
+                if entry['ip'] == serveur_ip:
+                    serveur_actif['nom'] = entry['nom']
+                    serveur_actif['serveur'] = entry.get('serveur')
+                    break
+
+            if get_server_log_config(serveur_ip):
+                try:
+                    serveur_logs = _load_log_stats(serveur_ip)
+                except LogAnalyzerError as exc:
+                    serveur_logs_error = str(exc)
+            else:
+                serveur_logs_error = (
+                    'Aucun journal web configuré pour ce serveur. '
+                    'Seul le Site témoin (192.168.1.11) expose un access.log Apache.'
+                )
+
+        up_ips = [entry['ip'] for entry in serveurs_en_marche]
+        total_requests = 0
+        total_404 = 0
+        for ip in up_ips:
+            if not get_server_log_config(ip):
+                continue
+            try:
+                stats_host = _load_log_stats(ip)
+            except LogAnalyzerError:
+                continue
+            total_requests += int(stats_host['total_requests'])
+            total_404 += int(stats_host['total_404'])
+
+        incidence_404_pct = round((total_404 / total_requests) * 100, 1) if total_requests else 0.0
+        access_metrics = {
+            'total_requests': total_requests,
+            'total_404': total_404,
+            'incidence_404_pct': incidence_404_pct,
+        }
+
         context['stats'] = {
             'sources': SourceLog.objects.count(),
-            'serveurs': Serveur.objects.count(),
-            'logs': LogEntree.objects.count(),
+            'serveurs': len(serveurs_en_marche),
+            'logs': access_metrics['total_requests'],
+            'total_404': access_metrics['total_404'],
+            'incidence_404_pct': access_metrics['incidence_404_pct'],
             'anomalies': Anomalie.objects.count(),
             'alertes': Alerte.objects.filter(statut='NOUVEAU').count(),
             'rapports': Rapport.objects.count(),
@@ -244,7 +308,12 @@ def dashboard(request):
         )
         context['sources_disponibles'] = SourceLog.objects.order_by('nom_source')
         context['serveurs_disponibles'] = Serveur.objects.order_by('nom_serveur')
-        context['serveurs_en_marche'] = list_running_monitored_servers()
+        context['serveurs_en_marche'] = serveurs_en_marche
+        context['tous_les_serveurs'] = tous_les_serveurs
+        context['serveur_ip'] = serveur_ip
+        context['serveur_actif'] = serveur_actif
+        context['serveur_logs'] = serveur_logs
+        context['serveur_logs_error'] = serveur_logs_error
         context['search_terms'] = search_terms
         context['log_filters'] = {
             'q': search_query,
@@ -280,27 +349,10 @@ def servers_view(request):
 def log_stats(request):
     if not _is_authenticated(request):
         return redirect('login')
+    from django.conf import settings
 
-    role = request.session.get(SESSION_USER_ROLE, '').strip().lower()
-    if role != 'admin':
-        return redirect('dashboard')
-
-    error = None
-    stats = None
-    try:
-        stats = get_log_statistics()
-    except LogAnalyzerError as exc:
-        error = str(exc)
-
-    return render(
-        request,
-        'logs/log_stats.html',
-        {
-            'utilisateur_nom': request.session.get(SESSION_USER_NAME, ''),
-            'stats': stats,
-            'error': error,
-        },
-    )
+    host = getattr(settings, 'LOG_HOST_IP', '192.168.1.11')
+    return redirect(f'/dashboard/?serveur_ip={host}#logs-serveur')
 
 
 def password_reset_request_view(request):
