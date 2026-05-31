@@ -1,0 +1,623 @@
+{% load gologs_extras %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tableau de bord — GoLogs</title>
+    {% include "logs/_auth_styles.html" %}
+</head>
+<body>
+<div class="dashboard-layout">
+
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <div class="sidebar-logo-row">
+                <div class="sidebar-logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="3" fill="#2d4a3e" opacity="0.2"/><path d="M8 8h8M8 12h8M8 16h5" stroke="#2d4a3e" stroke-width="1.5" stroke-linecap="round"/><circle cx="17" cy="17" r="3" stroke="#66bb6a" stroke-width="1.5"/></svg>
+                </div>
+                <span class="sidebar-logo-text">GoLogs</span>
+            </div>
+            <div class="sidebar-logo-sub">Gestion des logs</div>
+        </div>
+
+        <nav class="sidebar-nav">
+            <button class="nav-item active" data-section="activite" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                Tableau de bord
+            </button>
+
+            {% if is_admin %}
+            <button class="nav-item" data-section="serveurs" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="6" rx="1"/><rect x="2" y="11" width="20" height="6" rx="1"/><rect x="2" y="19" width="20" height="2" rx="1"/></svg>
+                Serveurs
+            </button>
+            <div class="nav-submenu" id="submenu-serveurs">
+                {% for entry in serveurs_en_marche %}
+                <a href="{% if entry.serveur %}?serveur={{ entry.serveur.id_serveur }}#activite{% else %}#{% endif %}">{{ entry.label }}</a>
+                {% empty %}
+                <a href="#">Aucun serveurs en marche</a>
+                {% endfor %}
+            </div>
+
+            <button class="nav-item" data-section="analyse" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+                Simulations
+            </button>
+
+            <button class="nav-item" data-section="alertes" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg>
+                Alertes
+            </button>
+            {% endif %}
+        </nav>
+
+        <div class="sidebar-logout">
+            <a href="{% url 'logout' %}">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+                Déconnexion
+            </a>
+        </div>
+    </aside>
+
+    <div class="main-content">
+        <header class="topbar">
+            <div class="topbar-title">
+                <h1 id="page-title">Historique de l'activité — Tous les serveurs</h1>
+                {% if is_admin %}
+                <span class="live-badge">Surveillance en direct</span>
+                {% endif %}
+            </div>
+            <div class="topbar-actions">
+                <button class="topbar-icon-btn" type="button" aria-label="Notifications">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg>
+                </button>
+                <button class="topbar-icon-btn" type="button" aria-label="Paramètres">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                </button>
+                <div class="user-profile">
+                    <div class="user-profile-info">
+                        <div class="user-profile-role">{{ role|default:"Analyste" }}</div>
+                        <div class="user-profile-name">Bonjour, {{ utilisateur_prenom|default:utilisateur_nom }}</div>
+                    </div>
+                    <div class="user-avatar">{{ utilisateur_nom|initials }}</div>
+                </div>
+            </div>
+        </header>
+
+        <div class="page-body">
+
+            {% if not is_admin %}
+            <div class="card welcome-card">
+                <h2>Bienvenue sur GoLogs</h2>
+                <p>Bonjour {{ utilisateur_nom }}, votre espace est prêt.</p>
+            </div>
+
+            {% else %}
+
+            {# ── Section Activité (maquette 2) ── #}
+            <div class="dashboard-section active" id="section-activite">
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Filtres globaux</h3>
+                        <a href="{% url 'dashboard' %}" class="card-reset">Réinitialiser</a>
+                    </div>
+                    <div class="card-body">
+                        <form method="get" id="form-activite">
+                            <div class="filters-row">
+                                <div class="filter-group">
+                                    <label for="date_debut">Période — début</label>
+                                    <input type="date" id="date_debut" name="date_debut" value="{{ log_filters.date_debut }}">
+                                </div>
+                                <div class="filter-group">
+                                    <label for="date_fin">Période — fin</label>
+                                    <input type="date" id="date_fin" name="date_fin" value="{{ log_filters.date_fin }}">
+                                </div>
+                                <div class="filter-group">
+                                    <label for="serveur">Serveur d'origine</label>
+                                    <select id="serveur" name="serveur">
+                                        <option value="">Tous les serveurs</option>
+                                        {% for serveur in serveurs_disponibles %}
+                                        <option value="{{ serveur.id_serveur }}" {% if log_filters.serveur == serveur.id_serveur|stringformat:"s" %}selected{% endif %}>{{ serveur.nom_serveur }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label for="niveau">Type de log</label>
+                                    <select id="niveau" name="niveau">
+                                        <option value="">Tous les types</option>
+                                        {% for niveau in niveaux_disponibles %}
+                                        <option value="{{ niveau }}" {% if log_filters.niveau == niveau %}selected{% endif %}>{{ niveau }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="filters-row" style="margin-top:1rem;">
+                                <div class="filter-group" style="grid-column: span 3;">
+                                    <label for="q">Recherche par mot-clé</label>
+                                    <div class="search-input-wrap">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                                        <input type="search" id="q" name="q" value="{{ log_filters.q }}" placeholder="Rechercher…">
+                                    </div>
+                                </div>
+                                <div class="filter-group">
+                                    <label>&nbsp;</label>
+                                    <button type="submit" class="btn-filter" style="width:100%;justify-content:center;">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                                        Filtrer
+                                    </button>
+                                </div>
+                            </div>
+
+                            <details class="filters-advanced" {% if log_filters.service or log_filters.source %}open{% endif %}>
+                                <summary>Filtres avancés</summary>
+                                <div class="advanced-filters-grid">
+                                    <div class="filter-group">
+                                        <label for="service">Service</label>
+                                        <select id="service" name="service">
+                                            <option value="">Tous</option>
+                                            {% for service in services_disponibles %}
+                                            <option value="{{ service }}" {% if log_filters.service == service %}selected{% endif %}>{{ service }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="filter-group">
+                                        <label for="source">Source</label>
+                                        <select id="source" name="source">
+                                            <option value="">Toutes</option>
+                                            {% for source in sources_disponibles %}
+                                            <option value="{{ source.id_source }}" {% if log_filters.source == source.id_source|stringformat:"s" %}selected{% endif %}>{{ source.nom_source }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                            </details>
+
+                            {% if search_terms %}
+                            <div class="search-terms">
+                                {% for term in search_terms %}
+                                <span class="search-term">{{ term }}</span>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+
+                            <div class="filters-actions">
+                                {% if filtres_actifs %}<span class="filter-badge">{{ logs_filtres_count }} résultat(s)</span>{% endif %}
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="data-table-wrap">
+                        {% if derniers_logs %}
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Horodatage</th>
+                                    <th>Serveur</th>
+                                    <th>Type</th>
+                                    <th>Service</th>
+                                    <th>Message</th>
+                                    <th>Statut</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in derniers_logs %}
+                                <tr>
+                                    <td>{{ log.horodatage|date:"d/m/Y H:i:s" }}</td>
+                                    <td>
+                                        <span class="server-cell">
+                                            <span class="server-dot {{ forloop.counter0|server_dot }}"></span>
+                                            {{ log.serveur.nom_serveur }}
+                                        </span>
+                                    </td>
+                                    <td><span class="badge badge-{{ log.niveau|niveau_badge }}">{{ log.niveau }}</span></td>
+                                    <td><span class="component-pill">{{ log.service|default:"—" }}</span></td>
+                                    <td class="message-cell" title="{{ log.message }}">{{ log.message }}</td>
+                                    <td><span class="badge badge-{% if log.statut_traitement == 'NOUVEAU' %}nouveau{% else %}ok{% endif %}">{{ log.statut_traitement|default:"TRAITÉ" }}</span></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        <div class="pagination">
+                            <span class="pagination-info">Page 1 — {{ logs_filtres_count }} entrée(s)</span>
+                            <div class="pagination-pages">
+                                <button class="page-btn active" type="button">1</button>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="empty-state">
+                            {% if filtres_actifs %}
+                            Aucun log ne correspond à votre recherche.
+                            {% else %}
+                            Aucun log importé. Lancez <code>python manage.py seed_demo</code>.
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="widgets-row">
+                    <div class="widget widget-dark">
+                        <div class="widget-label">Taux d'incidents</div>
+                        <div class="widget-value">{% if stats.logs %}{% widthratio stats.anomalies stats.logs 100 %}%{% else %}0%{% endif %}</div>
+                        <div class="widget-sub">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                            {{ stats.anomalies }} anomalie(s) détectée(s)
+                        </div>
+                        <svg class="widget-icon-bg" width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                    </div>
+                    <div class="widget widget-light">
+                        <div class="widget-icons-row">
+                            <div class="widget-icon-circle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2d4a3e" stroke-width="2"><circle cx="12" cy="12" r="3"/></svg></div>
+                            <div class="widget-icon-circle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2d4a3e" stroke-width="2"><circle cx="12" cy="12" r="3"/></svg></div>
+                            <div class="widget-icon-circle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2d4a3e" stroke-width="2"><circle cx="12" cy="12" r="3"/></svg></div>
+                        </div>
+                        <div class="widget-label">Services actifs</div>
+                        <div class="widget-value">{{ services_disponibles|length }}</div>
+                        <div class="widget-sub">{{ stats.sources }} source(s) monitorée(s)</div>
+                    </div>
+                    <div class="widget widget-light">
+                        <div class="widget-label">Volume de logs</div>
+                        <div class="widget-value">{{ stats.logs }}</div>
+                        <div class="widget-sub">entrées en base</div>
+                        <div class="progress-bar">
+                            <div class="progress-bar-fill" style="width: {% if stats.logs %}{% widthratio stats.logs 1000 100 %}%{% else %}0%{% endif %}; max-width:100%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Section Analyse (maquette 3) ── #}
+            <div class="dashboard-section" id="section-analyse">
+
+                <div class="card">
+                    <div class="card-body">
+                        <form method="get">
+                            <div class="filters-row">
+                                <div class="filter-group">
+                                    <label for="analyse_serveur">Serveur</label>
+                                    <select id="analyse_serveur" name="serveur">
+                                        <option value="">Tous</option>
+                                        {% for serveur in serveurs_disponibles %}
+                                        <option value="{{ serveur.id_serveur }}" {% if log_filters.serveur == serveur.id_serveur|stringformat:"s" %}selected{% endif %}>{{ serveur.nom_serveur }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label for="analyse_service">Service</label>
+                                    <select id="analyse_service" name="service">
+                                        <option value="">Tous</option>
+                                        {% for service in services_disponibles %}
+                                        <option value="{{ service }}" {% if log_filters.service == service %}selected{% endif %}>{{ service }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="filter-group">
+                                    <label for="analyse_date_debut">Plage de temps</label>
+                                    <input type="date" id="analyse_date_debut" name="date_debut" value="{{ log_filters.date_debut }}">
+                                </div>
+                                <div class="filter-group">
+                                    <label for="analyse_q">Adresse IP / recherche</label>
+                                    <div class="search-input-wrap">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                                        <input type="search" id="analyse_q" name="q" value="{{ log_filters.q }}" placeholder="Rechercher…">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="filters-actions">
+                                <button type="submit" class="btn-go">Go</button>
+                                <button type="button" class="btn-secondary" onclick="window.location='{% url 'dashboard' %}#analyse'">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title-lg">Registre des Logs Détaillés</div>
+                            <div class="card-subtitle">Volume de données : {{ logs_filtres_count }} entrées</div>
+                        </div>
+                        <div class="card-header-actions">
+                            <button class="topbar-icon-btn" type="button" onclick="location.reload()">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="data-table-wrap">
+                        {% if derniers_logs %}
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Date &amp; Heure</th>
+                                    <th>Adresse IP</th>
+                                    <th>Niveau</th>
+                                    <th>Composant</th>
+                                    <th>Message Détaillé</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in derniers_logs %}
+                                <tr>
+                                    <td>{{ log.horodatage|date:"d/m/Y H:i:s" }}</td>
+                                    <td>{{ log.serveur.adresse_ip|default:"—" }}</td>
+                                    <td><span class="badge badge-{{ log.niveau|niveau_badge }}">{{ log.niveau|upper }}</span></td>
+                                    <td><span class="component-pill">{{ log.service|default:log.source.nom_source }}</span></td>
+                                    <td class="message-cell" title="{{ log.message }}">{{ log.message }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        <div class="pagination">
+                            <span class="pagination-info">Page 1 sur {% if logs_filtres_count %}{% widthratio logs_filtres_count 100 1 %}{% else %}1{% endif %}</span>
+                            <div class="pagination-pages">
+                                <button class="page-btn active" type="button">1</button>
+                            </div>
+                        </div>
+                        {% else %}
+                        <div class="empty-state">Aucune donnée à afficher pour cette analyse.</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="analysis-widgets">
+                    <div class="health-widget">
+                        <h4>Santé Globale du Système</h4>
+                        <p>Surveillance en temps réel des métriques d'infrastructure et des journaux applicatifs.</p>
+                        <div class="health-stats">
+                            <div>
+                                <div class="health-stat-label">Serveurs actifs</div>
+                                <div class="health-stat-value">{{ stats.serveurs }}</div>
+                            </div>
+                            <div>
+                                <div class="health-stat-label">Alertes nouvelles</div>
+                                <div class="health-stat-value">{{ stats.alertes }}</div>
+                            </div>
+                            <div>
+                                <div class="health-stat-label">Rapports</div>
+                                <div class="health-stat-value">{{ stats.rapports }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="security-widget">
+                        <div class="security-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+                        </div>
+                        <h4>Sécurité des Journaux</h4>
+                        <p>Les mots de passe et données sensibles sont chiffrés. Les accès sont tracés et contrôlés par rôle.</p>
+                        <a href="#" class="security-link">Consulter les politiques →</a>
+                    </div>
+                </div>
+            </div>
+
+            {# ── Section Alertes ── #}
+            <div class="dashboard-section" id="section-alertes">
+
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Recherche d'alertes</h3>
+                        <a href="{% url 'dashboard' %}#alertes" class="card-reset">Réinitialiser</a>
+                    </div>
+                    <div class="card-body">
+                        <form method="get">
+                            <div class="filters-row">
+                                <div class="filter-group" style="grid-column: span 3;">
+                                    <label for="alert_q">Recherche par mot-clé</label>
+                                    <div class="search-input-wrap">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                                        <input type="search" id="alert_q" name="alert_q" value="{{ alert_filters.q }}" placeholder="Ex : CRITIQUE auth NOUVEAU">
+                                    </div>
+                                </div>
+                                <div class="filter-group">
+                                    <label>&nbsp;</label>
+                                    <button type="submit" class="btn-filter" style="width:100%;justify-content:center;">Rechercher</button>
+                                </div>
+                            </div>
+
+                            <details class="filters-advanced" {% if alert_filters.severite or alert_filters.canal or alert_filters.statut %}open{% endif %}>
+                                <summary>Filtres avancés alertes</summary>
+                                <div class="advanced-filters-grid">
+                                    <div class="filter-group">
+                                        <label for="alert_severite">Sévérité</label>
+                                        <select id="alert_severite" name="alert_severite">
+                                            <option value="">Toutes</option>
+                                            {% for severite in alert_severites_disponibles %}
+                                            <option value="{{ severite }}" {% if alert_filters.severite == severite %}selected{% endif %}>{{ severite }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="filter-group">
+                                        <label for="alert_canal">Canal</label>
+                                        <select id="alert_canal" name="alert_canal">
+                                            <option value="">Tous</option>
+                                            {% for canal in alert_canaux_disponibles %}
+                                            <option value="{{ canal }}" {% if alert_filters.canal == canal %}selected{% endif %}>{{ canal }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="filter-group">
+                                        <label for="alert_statut">Statut</label>
+                                        <select id="alert_statut" name="alert_statut">
+                                            <option value="">Tous</option>
+                                            {% for statut in alert_statuts_disponibles %}
+                                            <option value="{{ statut }}" {% if alert_filters.statut == statut %}selected{% endif %}>{{ statut }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="filter-group">
+                                        <label for="alert_type">Type d'anomalie</label>
+                                        <select id="alert_type" name="alert_type">
+                                            <option value="">Tous</option>
+                                            {% for alert_type in alert_types_disponibles %}
+                                            <option value="{{ alert_type }}" {% if alert_filters.type == alert_type %}selected{% endif %}>{{ alert_type }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="filter-group">
+                                        <label for="alert_date_debut">Date début</label>
+                                        <input id="alert_date_debut" type="date" name="alert_date_debut" value="{{ alert_filters.date_debut }}">
+                                    </div>
+                                    <div class="filter-group">
+                                        <label for="alert_date_fin">Date fin</label>
+                                        <input id="alert_date_fin" type="date" name="alert_date_fin" value="{{ alert_filters.date_fin }}">
+                                    </div>
+                                </div>
+                            </details>
+
+                            {% if alert_search_terms %}
+                            <div class="search-terms">
+                                {% for term in alert_search_terms %}
+                                <span class="search-term">{{ term }}</span>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+
+                            {% if alert_filtres_actifs %}
+                            <div class="filters-actions">
+                                <span class="filter-badge">{{ alertes_filtrees_count }} résultat(s)</span>
+                            </div>
+                            {% endif %}
+                        </form>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="data-table-wrap">
+                        {% if dernieres_alertes %}
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Sévérité</th>
+                                    <th>Canal</th>
+                                    <th>Statut</th>
+                                    <th>Type anomalie</th>
+                                    <th>Source</th>
+                                    <th>Serveur</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for alerte in dernieres_alertes %}
+                                <tr>
+                                    <td>{{ alerte.date_alerte|date:"d/m/Y H:i:s" }}</td>
+                                    <td><span class="badge badge-{{ alerte.severite|severite_badge }}">{{ alerte.severite }}</span></td>
+                                    <td><span class="component-pill">{{ alerte.canal }}</span></td>
+                                    <td><span class="badge badge-nouveau">{{ alerte.statut }}</span></td>
+                                    <td>{{ alerte.anomalie.type_anomalie }}</td>
+                                    <td>{{ alerte.anomalie.log.source.nom_source }}</td>
+                                    <td>{{ alerte.anomalie.log.serveur.nom_serveur }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% else %}
+                        <div class="empty-state">
+                            {% if alert_filtres_actifs %}
+                            Aucune alerte ne correspond à votre recherche.
+                            {% else %}
+                            Aucune alerte en base. Lancez <code>python manage.py generate_alerts</code>.
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            {# ── Section Serveurs (liste) ── #}
+            <div class="dashboard-section" id="section-serveurs">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title-lg">Serveurs monitorés</div>
+                    </div>
+                    <div class="data-table-wrap">
+                        {% if serveurs_disponibles %}
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Nom</th>
+                                    <th>Adresse IP</th>
+                                    <th>Système</th>
+                                    <th>Localisation</th>
+                                    <th>Statut</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for serveur in serveurs_disponibles %}
+                                <tr>
+                                    <td>
+                                        <span class="server-cell">
+                                            <span class="server-dot {{ forloop.counter0|server_dot }}"></span>
+                                            {{ serveur.nom_serveur }}
+                                        </span>
+                                    </td>
+                                    <td>{{ serveur.adresse_ip }}</td>
+                                    <td>{{ serveur.systeme_exploitation|default:"—" }}</td>
+                                    <td>{{ serveur.localisation|default:"—" }}</td>
+                                    <td><span class="badge badge-ok">{{ serveur.statut|default:"ACTIF" }}</span></td>
+                                    <td><a href="?serveur={{ serveur.id_serveur }}#activite" class="card-reset">Voir les logs</a></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% else %}
+                        <div class="empty-state">Aucun serveur enregistré.</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <button class="fab" type="button" title="Exporter" aria-label="Exporter">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            </button>
+
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var titles = {
+        activite: "Historique de l'activité — Tous les serveurs",
+        analyse: "Analyse Approfondie – Logs",
+        alertes: "Alertes & Anomalies",
+        serveurs: "Serveurs monitorés"
+    };
+
+    function showSection(name) {
+        document.querySelectorAll('.dashboard-section').forEach(function (el) {
+            el.classList.remove('active');
+        });
+        var section = document.getElementById('section-' + name);
+        if (section) section.classList.add('active');
+
+        document.querySelectorAll('.nav-item[data-section]').forEach(function (btn) {
+            btn.classList.toggle('active', btn.dataset.section === name);
+        });
+
+        var titleEl = document.getElementById('page-title');
+        if (titleEl && titles[name]) titleEl.textContent = titles[name];
+
+        history.replaceState(null, '', '#' + name);
+    }
+
+    document.querySelectorAll('.nav-item[data-section]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            showSection(btn.dataset.section);
+        });
+    });
+
+    var hash = location.hash.replace('#', '');
+    if (hash && document.getElementById('section-' + hash)) {
+        showSection(hash);
+    }
+})();
+</script>
+</body>
+</html>
