@@ -75,12 +75,12 @@
                 {% endif %}
             </div>
             <div class="topbar-actions">
-                <button class="topbar-icon-btn" type="button" aria-label="Notifications">
+                {# <button class="topbar-icon-btn" type="button" aria-label="Notifications">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg>
                 </button>
                 <button class="topbar-icon-btn" type="button" aria-label="Paramètres">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-                </button>
+                </button> #}
                 <div class="user-profile">
                     <div class="user-profile-info">
                         <div class="user-profile-role">{{ role|default:"Analyste" }}</div>
@@ -261,9 +261,9 @@
                             <div class="widget-icon-circle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2d4a3e" stroke-width="2"><circle cx="12" cy="12" r="3"/></svg></div>
                             <div class="widget-icon-circle"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2d4a3e" stroke-width="2"><circle cx="12" cy="12" r="3"/></svg></div>
                         </div>
-                        <div class="widget-label">Services actifs</div>
-                        <div class="widget-value">{{ services_disponibles|length }}</div>
-                        <div class="widget-sub">{{ stats.sources }} source(s) monitorée(s)</div>
+                        <div class="widget-label">Serveurs actifs</div>
+                        <div class="widget-value">{{ serveurs_en_marche|length }}</div>
+                        <div class="widget-sub">{{ serveurs_en_marche|length }} serveur(s) UP</div>
                     </div>
                     <div class="widget widget-light">
                         <div class="widget-label">Volume de logs</div>
@@ -383,7 +383,7 @@
                         <div class="health-stats">
                             <div>
                                 <div class="health-stat-label">Serveurs actifs</div>
-                                <div class="health-stat-value">{{ stats.serveurs }}</div>
+                                <div class="health-stat-value">{{ serveurs_en_marche|length }}</div>
                             </div>
                             <div>
                                 <div class="health-stat-label">Alertes nouvelles</div>
@@ -598,7 +598,7 @@
                 </div>
             </div>
 
-            <button class="fab" type="button" title="Exporter" aria-label="Exporter">
+            <button class="fab" id="fab-export" type="button" title="Exporter" aria-label="Exporter" hidden>
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
             </button>
 
@@ -619,6 +619,12 @@
 
     var params = new URLSearchParams(location.search);
     var serveurIp = params.get('serveur_ip');
+    var fabExport = document.getElementById('fab-export');
+
+    function toggleFab(sectionName) {
+        if (!fabExport) return;
+        fabExport.hidden = sectionName !== 'logs-serveur';
+    }
 
     function showSection(name) {
         document.querySelectorAll('.dashboard-section').forEach(function (el) {
@@ -639,6 +645,8 @@
         } else {
             history.replaceState(null, '', location.pathname + '#' + name);
         }
+
+        toggleFab(name);
     }
 
     document.querySelectorAll('.nav-item[data-section]').forEach(function (btn) {
@@ -654,6 +662,8 @@
         showSection('logs-serveur');
     } else if (hash && document.getElementById('section-' + hash)) {
         showSection(hash);
+    } else {
+        toggleFab('activite');
     }
 })();
 </script>
