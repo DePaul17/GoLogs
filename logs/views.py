@@ -6,6 +6,7 @@ from logs.auth import authenticate_user
 from logs.registration import register_user
 from logs.log_search import apply_log_search, parse_search_terms
 from logs.network_probe import list_running_monitored_servers
+from logs.services.log_analyzer import LogAnalyzerError, get_log_statistics
 from logs.models import Alerte, Anomalie, LogEntree, Rapport, SourceLog, Serveur, Utilisateur
 from logs.password_reset import (
     parse_reset_token,
@@ -268,6 +269,32 @@ def dashboard(request):
         )
 
     return render(request, 'logs/dashboard.html', context)
+
+
+def log_stats(request):
+    if not _is_authenticated(request):
+        return redirect('login')
+
+    role = request.session.get(SESSION_USER_ROLE, '').strip().lower()
+    if role != 'admin':
+        return redirect('dashboard')
+
+    error = None
+    stats = None
+    try:
+        stats = get_log_statistics()
+    except LogAnalyzerError as exc:
+        error = str(exc)
+
+    return render(
+        request,
+        'logs/log_stats.html',
+        {
+            'utilisateur_nom': request.session.get(SESSION_USER_NAME, ''),
+            'stats': stats,
+            'error': error,
+        },
+    )
 
 
 def password_reset_request_view(request):

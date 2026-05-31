@@ -1,0 +1,205 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Statistiques Apache — GoLogs</title>
+    {% include "logs/_auth_styles.html" %}
+</head>
+<body>
+<div class="dashboard-layout">
+
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <div class="sidebar-logo-row">
+                <div class="sidebar-logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="3" fill="#2d4a3e" opacity="0.2"/><path d="M8 8h8M8 12h8M8 16h5" stroke="#2d4a3e" stroke-width="1.5" stroke-linecap="round"/><circle cx="17" cy="17" r="3" stroke="#66bb6a" stroke-width="1.5"/></svg>
+                </div>
+                <span class="sidebar-logo-text">GoLogs</span>
+            </div>
+            <div class="sidebar-logo-sub">Statistiques access.log</div>
+        </div>
+
+        <nav class="sidebar-nav">
+            <a class="nav-item" href="{% url 'dashboard' %}">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                Retour au tableau de bord
+            </a>
+        </nav>
+
+        <div class="sidebar-logout">
+            <a href="{% url 'logout' %}">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+                Déconnexion
+            </a>
+        </div>
+    </aside>
+
+    <div class="main-content">
+        <header class="topbar">
+            <div class="topbar-title">
+                <h1>Statistiques Apache — Site témoin</h1>
+                {% if stats %}
+                <span class="live-badge">{{ stats.host }} · {{ stats.log_file }}</span>
+                {% endif %}
+            </div>
+            <div class="topbar-actions">
+                <span class="topbar-user">{{ utilisateur_nom }}</span>
+            </div>
+        </header>
+
+        <div class="dashboard-body">
+            {% if error %}
+            <div class="card" style="margin-bottom: 1.5rem;">
+                <div class="card-body">
+                    <div class="empty-state" style="color: #c62828;">
+                        Impossible de récupérer les logs : {{ error }}
+                    </div>
+                </div>
+            </div>
+            {% elif stats %}
+            <div class="analysis-widgets" style="margin-bottom: 1.5rem;">
+                <div class="health-widget">
+                    <h4>Vue d'ensemble</h4>
+                    <p>Analyse du fichier access.log (Combined Log Format) lu via SSH.</p>
+                    <div class="health-stats">
+                        <div>
+                            <div class="health-stat-label">Requêtes totales</div>
+                            <div class="health-stat-value">{{ stats.total_requests }}</div>
+                        </div>
+                        <div>
+                            <div class="health-stat-label">Lignes parsées</div>
+                            <div class="health-stat-value">{{ stats.lines_parsed }}</div>
+                        </div>
+                        <div>
+                            <div class="health-stat-label">Lignes ignorées</div>
+                            <div class="health-stat-value">{{ stats.lines_skipped }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card" style="margin-bottom: 1.5rem;">
+                <div class="card-header">
+                    <div class="card-title-lg">Pages les plus visitées</div>
+                </div>
+                <div class="data-table-wrap">
+                    {% if stats.top_pages %}
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>URL</th>
+                                <th>Hits</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in stats.top_pages %}
+                            <tr>
+                                <td><code>{{ row.url }}</code></td>
+                                <td>{{ row.hits }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div class="empty-state">Aucune requête enregistrée.</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card" style="margin-bottom: 1.5rem;">
+                <div class="card-header">
+                    <div class="card-title-lg">Erreurs 404</div>
+                </div>
+                <div class="data-table-wrap">
+                    {% if stats.errors_404 %}
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>URL</th>
+                                <th>Occurrences</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in stats.errors_404 %}
+                            <tr>
+                                <td><code>{{ row.url }}</code></td>
+                                <td>{{ row.count }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div class="empty-state">Aucune erreur 404 détectée.</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card" style="margin-bottom: 1.5rem;">
+                <div class="card-header">
+                    <div class="card-title-lg">Codes HTTP</div>
+                </div>
+                <div class="data-table-wrap">
+                    {% if stats.status_codes %}
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Code</th>
+                                <th>Nombre</th>
+                                <th>Répartition</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in stats.status_codes %}
+                            <tr>
+                                <td>
+                                    <span class="badge badge-{% if row.code == '200' %}ok{% elif row.code == '404' %}warn{% elif row.code == '500' or row.code == '502' or row.code == '503' %}error{% else %}info{% endif %}">
+                                        {{ row.code }}
+                                    </span>
+                                </td>
+                                <td>{{ row.count }}</td>
+                                <td>{{ row.percent }} %</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div class="empty-state">Aucun code HTTP analysé.</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title-lg">IPs les plus actives</div>
+                </div>
+                <div class="data-table-wrap">
+                    {% if stats.top_ips %}
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Adresse IP</th>
+                                <th>Requêtes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in stats.top_ips %}
+                            <tr>
+                                <td>{{ row.ip }}</td>
+                                <td>{{ row.hits }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    {% else %}
+                    <div class="empty-state">Aucune IP enregistrée.</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+</body>
+</html>
