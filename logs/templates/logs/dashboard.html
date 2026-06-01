@@ -35,7 +35,7 @@
             </button>
             <div class="nav-submenu" id="submenu-serveurs">
                 {% for entry in serveurs_en_marche %}
-                <a href="?serveur_ip={{ entry.ip }}#logs-serveur" class="nav-submenu-server{% if serveur_ip == entry.ip %} is-active{% endif %}">
+                <a href="{% url 'dashboard' %}?serveur_ip={{ entry.ip }}#logs-serveur" class="nav-submenu-server js-nav-logs-serveur{% if serveur_ip == entry.ip %} is-active{% endif %}">
                     <span class="nav-submenu-line">
                         <span class="nav-submenu-name">{{ entry.nom }}</span>
                         <span class="nav-submenu-ip">{{ entry.ip }}</span>
@@ -645,7 +645,7 @@
                                     </td>
                                     <td>
                                         {% if entry.up %}
-                                        <a href="?serveur_ip={{ entry.ip }}#logs-serveur" class="card-reset">Voir les logs</a>
+                                        <a href="{% url 'dashboard' %}?serveur_ip={{ entry.ip }}#logs-serveur" class="card-reset js-nav-logs-serveur">Voir les logs</a>
                                         {% else %}
                                         <span class="text-muted">Indisponible</span>
                                         {% endif %}
@@ -663,6 +663,8 @@
 
             {% endif %}
         </div>
+
+        {% include "logs/_footer.html" %}
     </div>
 </div>
 
@@ -683,6 +685,53 @@
 
     var params = new URLSearchParams(location.search);
     var serveurIp = params.get('serveur_ip');
+
+    function refreshParams() {
+        params = new URLSearchParams(location.search);
+        serveurIp = params.get('serveur_ip');
+    }
+
+    function isDashboardPage() {
+        return location.pathname.indexOf('dashboard') !== -1;
+    }
+
+    function navigateTo(url, sectionName) {
+        refreshParams();
+        var target = new URL(url, window.location.origin);
+        var newIp = target.searchParams.get('serveur_ip');
+        var mustReload = newIp !== serveurIp;
+
+        if (isDashboardPage() && !mustReload) {
+            history.pushState(null, '', target.pathname + target.search + target.hash);
+            refreshParams();
+            if (sectionName) {
+                showSection(sectionName);
+            } else {
+                routeFromUrl();
+            }
+            return true;
+        }
+        return false;
+    }
+
+    function routeFromUrl() {
+        refreshParams();
+        var hash = location.hash.replace('#', '');
+
+        if (hash === 'logs-serveur') {
+            showSection('logs-serveur');
+        } else if (hash === 'logs-graphes') {
+            showSection('logs-graphes');
+        } else if (hash === 'serveurs') {
+            showSection('serveurs');
+        } else if (params.get('filtrer') === '1') {
+            showSection('activite');
+        } else if (hash && document.getElementById('section-' + hash)) {
+            showSection(hash);
+        } else {
+            showSection('activite');
+        }
+    }
     var serverChartsReady = false;
     var topPagesChart = null;
     var statusDonutChart = null;
@@ -835,8 +884,12 @@
         var titleEl = document.getElementById('page-title');
         if (titleEl && titles[name]) titleEl.textContent = titles[name];
 
-        if (name === 'logs-serveur' && serveurIp) {
-            history.replaceState(null, '', '?serveur_ip=' + encodeURIComponent(serveurIp) + '#logs-serveur');
+        if (name === 'logs-serveur') {
+            if (serveurIp) {
+                history.replaceState(null, '', '?serveur_ip=' + encodeURIComponent(serveurIp) + '#logs-serveur');
+            } else {
+                history.replaceState(null, '', location.pathname + '#logs-serveur');
+            }
         } else if (name === 'logs-graphes') {
             if (serveurIp) {
                 history.replaceState(null, '', '?serveur_ip=' + encodeURIComponent(serveurIp) + '#logs-graphes');
@@ -866,13 +919,22 @@
 
     document.querySelectorAll('.js-show-graphes').forEach(function (link) {
         link.addEventListener('click', function (event) {
-            var targetIp = (new URL(link.href, window.location.origin)).searchParams.get('serveur_ip');
-            if (location.pathname.indexOf('dashboard') !== -1 && targetIp && serveurIp === targetIp) {
+            if (navigateTo(link.href, 'logs-graphes')) {
                 event.preventDefault();
-                showSection('logs-graphes');
             }
         });
     });
+
+    document.querySelectorAll('.js-show-logs, .js-nav-logs-serveur').forEach(function (link) {
+        link.addEventListener('click', function (event) {
+            if (navigateTo(link.href, 'logs-serveur')) {
+                event.preventDefault();
+            }
+        });
+    });
+
+    window.addEventListener('hashchange', routeFromUrl);
+    window.addEventListener('popstate', routeFromUrl);
 
     var importLink = document.querySelector('#submenu-import a[href="#import"]');
     if (importLink) {
@@ -882,20 +944,7 @@
         });
     }
 
-    var hash = location.hash.replace('#', '');
-    if (hash === 'logs-serveur') {
-        showSection('logs-serveur');
-    } else if (hash === 'logs-graphes') {
-        showSection('logs-graphes');
-    } else if (hash === 'serveurs') {
-        showSection('serveurs');
-    } else if (params.get('filtrer') === '1') {
-        showSection('activite');
-    } else if (hash && document.getElementById('section-' + hash)) {
-        showSection(hash);
-    } else {
-        showSection('activite');
-    }
+    routeFromUrl();
 })();
 </script>
 </body>

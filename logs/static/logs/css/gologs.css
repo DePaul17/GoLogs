@@ -585,6 +585,17 @@ button, input, select { font-family: inherit; }
     min-width: 0;
     display: flex;
     flex-direction: column;
+    min-height: 100vh;
+}
+
+.app-footer {
+    margin-top: auto;
+    padding: 1rem 1.75rem 1.25rem;
+    border-top: 1px solid var(--gray-200);
+    background: var(--white);
+    color: var(--gray-500);
+    font-size: 0.82rem;
+    text-align: center;
 }
 
 .topbar {
