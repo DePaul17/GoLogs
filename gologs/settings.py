@@ -178,12 +178,20 @@ LOG_HOST_PASSWORD = os.environ.get('LOG_HOST_PASSWORD', 'iris')
 LOG_FILE_PATH = os.environ.get('LOG_FILE_PATH', '/var/log/apache2/access.log')
 LOG_HOST_SSH_PORT = int(os.environ.get('LOG_HOST_SSH_PORT', '22'))
 LOG_SSH_CONNECT_TIMEOUT_SEC = int(os.environ.get('LOG_SSH_CONNECT_TIMEOUT_SEC', '15'))
+LOG_SSH_USE_SUDO = os.environ.get('LOG_SSH_USE_SUDO', 'true').lower() in ('1', 'true', 'yes')
+LOG_READ_LINE_LIMIT = int(os.environ.get('LOG_READ_LINE_LIMIT', '10000'))
+LOG_FILE_PATH_CANDIDATES = [
+    '/var/log/apache2/access.log',
+    '/var/log/nginx/access.log',
+    '/var/log/httpd/access_log',
+]
 
 SERVER_LOG_CONFIG = {
     '192.168.1.11': {
         'ssh_user': LOG_HOST_USER,
         'ssh_password': LOG_HOST_PASSWORD,
         'log_file_path': LOG_FILE_PATH,
+        'log_file_paths': LOG_FILE_PATH_CANDIDATES,
         'ssh_port': LOG_HOST_SSH_PORT,
     },
 }

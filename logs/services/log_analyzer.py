@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import re
 import shlex
-from collections import Counter
+import subprocess
+from collections import Counter, deque
 from datetime import date, datetime
+from pathlib import Path
 
 import paramiko
 from django.conf import settings
@@ -22,6 +24,13 @@ COMBINED_LOG_RE = re.compile(
 TOP_LIMIT = 20
 RECENT_LIMIT = 50
 FILTER_LIMIT = 100
+DEFAULT_LOG_CANDIDATES = (
+    '/var/log/apache2/access.log',
+    '/var/log/nginx/access.log',
+    '/var/log/httpd/access_log',
+)
+
+_resolved_log_paths: dict[str, str] = {}
 
 
 class LogAnalyzerError(RuntimeError):
@@ -54,47 +63,149 @@ def _ssh_connect_kwargs(host_ip: str) -> dict[str, object]:
     password = config.get('ssh_password', '')
     if not username:
         raise LogAnalyzerError(f'SSH user manquant pour {host_ip}.')
-    if password == '':
-        raise LogAnalyzerError(f'SSH password manquant pour {host_ip}.')
 
-    return {
+    kw: dict[str, object] = {
         'hostname': host_ip,
         'port': int(config.get('ssh_port', getattr(settings, 'LOG_HOST_SSH_PORT', 22))),
         'username': username,
-        'password': password,
         'timeout': int(getattr(settings, 'LOG_SSH_CONNECT_TIMEOUT_SEC', 15)),
         'allow_agent': False,
         'look_for_keys': False,
         'banner_timeout': int(getattr(settings, 'LOG_SSH_CONNECT_TIMEOUT_SEC', 15)),
     }
+    if password != '':
+        kw['password'] = password
+    return kw
 
 
-def fetch_remote_log_content(host_ip: str, log_path: str | None = None) -> str:
-    """Récupère le contenu du fichier de log via SSH."""
-    config = get_server_log_config(host_ip)
-    if not config:
-        raise LogAnalyzerError(f'Aucune source de logs web configurée pour {host_ip}.')
+def get_resolved_log_path(host_ip: str) -> str:
+    """Dernier fichier access.log effectivement lu pour ce serveur."""
+    return _resolved_log_paths.get(host_ip, '')
 
-    path = log_path or config.get('log_file_path', '/var/log/apache2/access.log')
+
+def _log_line_limit() -> int:
+    return int(getattr(settings, 'LOG_READ_LINE_LIMIT', 10000))
+
+
+def _use_sudo() -> bool:
+    return getattr(settings, 'LOG_SSH_USE_SUDO', True)
+
+
+def _candidate_log_paths(host_ip: str, preferred: str | None = None) -> list[str]:
+    config = get_server_log_config(host_ip) or {}
+    extra = config.get('log_file_paths') or getattr(
+        settings,
+        'LOG_FILE_PATH_CANDIDATES',
+        list(DEFAULT_LOG_CANDIDATES),
+    )
+    ordered: list[str] = []
+    for path in [preferred, config.get('log_file_path'), *extra, *DEFAULT_LOG_CANDIDATES]:
+        if path and path not in ordered:
+            ordered.append(str(path))
+    return ordered
+
+
+def _content_has_access_lines(content: str) -> bool:
+    if not content or not content.strip():
+        return False
+    for line in content.splitlines():
+        if parse_combined_log_line(line):
+            return True
+    return False
+
+
+def _tail_local_file(path: str, max_lines: int | None = None) -> str | None:
+    limit = max_lines or _log_line_limit()
+    log_path = Path(path)
+    if not log_path.is_file():
+        return None
+    try:
+        with log_path.open('r', encoding='utf-8', errors='replace') as handle:
+            return ''.join(deque(handle, maxlen=limit))
+    except OSError:
+        return None
+
+
+def _tail_local_with_sudo(path: str, password: str, max_lines: int | None = None) -> str | None:
+    if not _use_sudo():
+        return None
+    limit = max_lines or _log_line_limit()
+    attempts: list[list[str]] = [['sudo', '-n', 'tail', '-n', str(limit), path]]
+    if password:
+        attempts.append(['sudo', '-S', 'tail', '-n', str(limit), path])
+
+    for cmd in attempts:
+        try:
+            proc = subprocess.run(
+                cmd,
+                input=f'{password}\n' if cmd[1] == '-S' and password else None,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if proc.returncode == 0 and proc.stdout.strip():
+            return proc.stdout
+    return None
+
+
+def _read_local_log(host_ip: str, paths: list[str], password: str = '') -> tuple[str, str] | None:
+    for path in paths:
+        content = _tail_local_file(path)
+        if content and _content_has_access_lines(content):
+            return content, path
+        if password:
+            content = _tail_local_with_sudo(path, password)
+            if content and _content_has_access_lines(content):
+                return content, path
+    return None
+
+
+def _ssh_exec(client: paramiko.SSHClient, command: str) -> tuple[int, str, str]:
+    _, stdout, stderr = client.exec_command(command, timeout=30)
+    exit_code = stdout.channel.recv_exit_status()
+    out = stdout.read().decode(errors='replace')
+    err = stderr.read().decode(errors='replace').strip()
+    return exit_code, out, err
+
+
+def _remote_read_commands(path: str, password: str) -> list[str]:
+    path_q = shlex.quote(path)
+    limit = _log_line_limit()
+    commands = [
+        f'tail -n {limit} {path_q} 2>/dev/null',
+        f'cat {path_q} 2>/dev/null',
+        f'sudo -n tail -n {limit} {path_q} 2>/dev/null',
+    ]
+    if password:
+        pwd_q = shlex.quote(password)
+        commands.append(
+            f'echo {pwd_q} | sudo -S tail -n {limit} {path_q} 2>/dev/null',
+        )
+    return commands
+
+
+def _read_log_via_ssh(
+    host_ip: str,
+    paths: list[str],
+    password: str,
+) -> tuple[str, str]:
     kw = _ssh_connect_kwargs(host_ip)
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    failures: list[str] = []
 
     try:
         client.connect(**kw)
-        cmd = (
-            f'tail -n 10000 {shlex.quote(path)} 2>/dev/null '
-            f'|| cat {shlex.quote(path)}'
-        )
-        _, stdout, stderr = client.exec_command(cmd)
-        exit_code = stdout.channel.recv_exit_status()
-        out = stdout.read().decode(errors='replace')
-        err = stderr.read().decode(errors='replace').strip()
-        if exit_code != 0:
-            raise LogAnalyzerError(
-                err or out.strip() or f'Impossible de lire {path} sur {host_ip}.',
-            )
-        return out
+        for path in paths:
+            for command in _remote_read_commands(path, password):
+                exit_code, out, err = _ssh_exec(client, command)
+                if exit_code == 0 and _content_has_access_lines(out):
+                    return out, path
+                if err and 'Permission denied' not in err:
+                    failures.append(f'{path}: {err}')
     except LogAnalyzerError:
         raise
     except Exception as exc:  # noqa: BLE001
@@ -103,6 +214,33 @@ def fetch_remote_log_content(host_ip: str, log_path: str | None = None) -> str:
         ) from exc
     finally:
         client.close()
+
+    detail = failures[0] if failures else 'fichier introuvable ou permissions insuffisantes'
+    tried = ', '.join(paths)
+    raise LogAnalyzerError(
+        f'Impossible de lire access.log sur {host_ip} ({tried}). {detail} '
+        'Vérifiez Apache/Nginx, le chemin du log et les droits SSH (utilisateur adm ou sudo).',
+    )
+
+
+def fetch_remote_log_content(host_ip: str, log_path: str | None = None) -> str:
+    """Récupère access.log en local (même VM) puis via SSH si nécessaire."""
+    config = get_server_log_config(host_ip)
+    if not config:
+        raise LogAnalyzerError(f'Aucune source de logs web configurée pour {host_ip}.')
+
+    password = str(config.get('ssh_password', ''))
+    paths = _candidate_log_paths(host_ip, log_path)
+
+    local_result = _read_local_log(host_ip, paths, password)
+    if local_result:
+        content, resolved = local_result
+        _resolved_log_paths[host_ip] = resolved
+        return content
+
+    content, resolved = _read_log_via_ssh(host_ip, paths, password)
+    _resolved_log_paths[host_ip] = resolved
+    return content
 
 
 def _parse_apache_timestamp(raw: str) -> datetime | None:
@@ -377,10 +515,9 @@ def get_log_statistics_for_host(host_ip: str) -> dict[str, object]:
     if not config:
         raise LogAnalyzerError(f'Aucune source de logs web configurée pour {host_ip}.')
 
-    path = config.get('log_file_path', '/var/log/apache2/access.log')
-    content = fetch_remote_log_content(host_ip, path)
+    content = fetch_remote_log_content(host_ip)
     stats = analyze_access_log(content)
-    stats['log_file'] = path
+    stats['log_file'] = get_resolved_log_path(host_ip) or config.get('log_file_path', '')
     stats['host'] = host_ip
     return stats
 

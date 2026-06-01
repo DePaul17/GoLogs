@@ -15,6 +15,7 @@ from logs.services.log_analyzer import (
     analyze_access_log,
     fetch_filtered_access_logs,
     fetch_remote_log_content,
+    get_resolved_log_path,
     get_server_log_config,
 )
 from logs.models import Alerte, Anomalie, LogEntree, Rapport, SourceLog, Serveur, Utilisateur
@@ -231,8 +232,8 @@ def dashboard(request):
                 stats = analyze_access_log(_load_log_content(host))
                 config = get_server_log_config(host)
                 stats['log_file'] = (
-                    config.get('log_file_path', '/var/log/apache2/access.log')
-                    if config else ''
+                    get_resolved_log_path(host)
+                    or (config.get('log_file_path', '') if config else '')
                 )
                 stats['host'] = host
                 log_stats_cache[host] = stats
