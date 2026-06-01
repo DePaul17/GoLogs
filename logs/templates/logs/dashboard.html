@@ -46,10 +46,17 @@
                 {% endfor %}
             </div>
 
-            <button class="nav-item" data-section="analyse" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
-                Simulations
+            <button class="nav-item" data-section="import" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                Import de logs
             </button>
+            <div class="nav-submenu" id="submenu-import">
+                <a href="#import" class="nav-submenu-server">
+                    <span class="nav-submenu-line">
+                        <span class="nav-submenu-name">Importer fichier Logs</span>
+                    </span>
+                </a>
+            </div>
 
             <button class="nav-item" data-section="alertes" type="button">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg>
@@ -94,6 +101,14 @@
             </div>
 
             {% else %}
+
+            {% if messages %}
+            <div class="flash-messages">
+                {% for message in messages %}
+                <div class="flash-message flash-{{ message.tags }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
 
             {# ── Section Activité (maquette 2) ── #}
             <div class="dashboard-section active" id="section-activite">
@@ -291,48 +306,72 @@
                 {% include "logs/_server_logs_section.html" %}
             </div>
 
-            {# ── Section Analyse (maquette 3) ── #}
-            <div class="dashboard-section" id="section-analyse">
+            {# ── Section Import de logs ── #}
+            <div class="dashboard-section" id="section-import">
+
+                <div class="card">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title-lg">Importer fichier Logs</div>
+                            <div class="card-subtitle">Fichiers CSV exportés depuis la section logs serveur</div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <form method="post" action="{% url 'import_logs_csv' %}" enctype="multipart/form-data" class="import-upload-form">
+                            {% csrf_token %}
+                            <div class="filters-row">
+                                <div class="filter-group" style="grid-column: span 3;">
+                                    <label for="fichier_csv">Fichier CSV</label>
+                                    <input type="file" id="fichier_csv" name="fichier_csv" accept=".csv,text/csv" required>
+                                </div>
+                                <div class="filter-group">
+                                    <label>&nbsp;</label>
+                                    <button type="submit" class="btn-filter" style="width:100%;justify-content:center;">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                                        Importer
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
 
                 <div class="card">
                     <div class="card-body">
-                        <form method="get">
+                        <form method="get" action="{% url 'dashboard' %}#import" id="import-filter-form">
                             <div class="filters-row">
                                 <div class="filter-group">
-                                    <label for="analyse_serveur">Serveur</label>
-                                    <select id="analyse_serveur" name="serveur">
+                                    <label for="import_serveur">Serveur</label>
+                                    <select id="import_serveur" name="import_serveur">
                                         <option value="">Tous</option>
-                                        {% for serveur in serveurs_disponibles %}
-                                        <option value="{{ serveur.id_serveur }}" {% if log_filters.serveur == serveur.id_serveur|stringformat:"s" %}selected{% endif %}>{{ serveur|server_display_name }} ({{ serveur.adresse_ip }})</option>
+                                        {% for entry in import_serveurs_disponibles %}
+                                        <option value="{{ entry.ip_serveur }}" {% if import_filters.serveur == entry.ip_serveur %}selected{% endif %}>{{ entry.nom_serveur }} ({{ entry.ip_serveur }})</option>
                                         {% endfor %}
                                     </select>
                                 </div>
                                 <div class="filter-group">
-                                    <label for="analyse_service">Service</label>
-                                    <select id="analyse_service" name="service">
-                                        <option value="">Tous</option>
-                                        {% for service in services_disponibles %}
-                                        <option value="{{ service }}" {% if log_filters.service == service %}selected{% endif %}>{{ service }}</option>
-                                        {% endfor %}
+                                    <label for="import_type_log">Type de requête</label>
+                                    <select id="import_type_log" name="import_type_log">
+                                        <option value="">Toutes</option>
+                                        <option value="normal" {% if import_filters.type_log == 'normal' %}selected{% endif %}>Normale (&lt; 400)</option>
+                                        <option value="erreur" {% if import_filters.type_log == 'erreur' %}selected{% endif %}>Erreur (≥ 400)</option>
                                     </select>
                                 </div>
                                 <div class="filter-group">
-                                    <label for="analyse_date_debut">Plage de temps</label>
-                                    <input type="date" id="analyse_date_debut" name="date_debut" value="{{ log_filters.date_debut }}">
+                                    <label for="import_date">Jour d'importation</label>
+                                    <input type="date" id="import_date" name="import_date" value="{{ import_filters.date }}">
                                 </div>
                                 <div class="filter-group">
-                                    <label for="analyse_q">Adresse IP / recherche</label>
+                                    <label for="import_q">IP client / DNS</label>
                                     <div class="search-input-wrap">
                                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-                                        <input type="search" id="analyse_q" name="q" value="{{ log_filters.q }}" placeholder="Rechercher…">
+                                        <input type="search" id="import_q" name="import_q" value="{{ import_filters.q }}" placeholder="IP visiteur ou URL…">
                                     </div>
                                 </div>
                             </div>
                             <div class="filters-actions">
-                                <button type="submit" class="btn-go">Go</button>
-                                <button type="button" class="btn-secondary" onclick="window.location='{% url 'dashboard' %}#analyse'">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-                                </button>
+                                <button type="submit" class="btn-filter">Filtrer</button>
+                                <a href="{% url 'dashboard' %}#import" class="card-reset">Réinitialiser</a>
                             </div>
                         </form>
                     </div>
@@ -341,67 +380,76 @@
                 <div class="card">
                     <div class="card-header">
                         <div>
-                            <div class="card-title-lg">Registre des Logs Détaillés</div>
-                            <div class="card-subtitle">Volume de données : {{ logs_filtres_count }} entrées</div>
-                        </div>
-                        <div class="card-header-actions">
-                            <button class="topbar-icon-btn" type="button" onclick="location.reload()">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
-                            </button>
+                            <div class="card-title-lg">Registre des logs importés</div>
+                            <div class="card-subtitle">Volume de données : {{ import_logs_count }} entrée(s)</div>
                         </div>
                     </div>
                     <div class="data-table-wrap">
-                        {% if derniers_logs %}
+                        {% if import_logs %}
                         <table class="data-table">
                             <thead>
                                 <tr>
-                                    <th>Date &amp; Heure</th>
-                                    <th>Adresse IP</th>
-                                    <th>Niveau</th>
-                                    <th>Composant</th>
-                                    <th>Message Détaillé</th>
+                                    <th>Date</th>
+                                    <th>Heure</th>
+                                    <th>Serveur</th>
+                                    <th>IP serveur</th>
+                                    <th>IP client</th>
+                                    <th>URL</th>
+                                    <th>Code</th>
+                                    <th>Importé le</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for log in derniers_logs %}
+                                {% for entry in import_logs %}
                                 <tr>
-                                    <td>{{ log.horodatage|date:"d/m/Y H:i:s" }}</td>
-                                    <td>{{ log.serveur.adresse_ip|default:"—" }}</td>
-                                    <td><span class="badge badge-{{ log.niveau|niveau_badge }}">{{ log.niveau|upper }}</span></td>
-                                    <td><span class="component-pill">{{ log.service|default:log.source.nom_source }}</span></td>
-                                    <td class="message-cell" title="{{ log.message }}">{{ log.message }}</td>
+                                    <td>{{ entry.date_log }}</td>
+                                    <td>{{ entry.heure_log }}</td>
+                                    <td>{{ entry.nom_serveur }}</td>
+                                    <td>{{ entry.ip_serveur }}</td>
+                                    <td>{{ entry.ip_visiteur }}</td>
+                                    <td class="message-cell" title="{{ entry.url }}"><code>{{ entry.url }}</code></td>
+                                    <td>
+                                        {% if entry.est_erreur %}
+                                        <span class="badge badge-warn">{{ entry.code_http|default:"ERR" }}</span>
+                                        {% elif entry.code_http == 200 %}
+                                        <span class="badge badge-ok">{{ entry.code_http }}</span>
+                                        {% else %}
+                                        <span class="badge badge-info">{{ entry.code_http }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ entry.fichier.date_import|date:"d/m/Y H:i" }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
                         </table>
-                        <div class="pagination">
-                            <span class="pagination-info">Page 1 sur {% if logs_filtres_count %}{% widthratio logs_filtres_count 100 1 %}{% else %}1{% endif %}</span>
-                            <div class="pagination-pages">
-                                <button class="page-btn active" type="button">1</button>
-                            </div>
-                        </div>
                         {% else %}
-                        <div class="empty-state">Aucune donnée à afficher pour cette analyse.</div>
+                        <div class="empty-state">
+                            {% if import_filtres_actifs %}
+                            Aucun log importé ne correspond à vos filtres.
+                            {% else %}
+                            Aucun log importé. Importez un fichier CSV exporté depuis un serveur.
+                            {% endif %}
+                        </div>
                         {% endif %}
                     </div>
                 </div>
 
                 <div class="analysis-widgets">
                     <div class="health-widget">
-                        <h4>Santé Globale du Système</h4>
-                        <p>Surveillance en temps réel des métriques d'infrastructure et des journaux applicatifs.</p>
+                        <h4>Global import</h4>
+                        <p>Données en temps réel d'importation des logs.</p>
                         <div class="health-stats">
                             <div>
-                                <div class="health-stat-label">Serveurs actifs</div>
-                                <div class="health-stat-value">{{ serveurs_en_marche|length }}</div>
+                                <div class="health-stat-label">Serveurs importés</div>
+                                <div class="health-stat-value">{{ import_stats.serveurs }}</div>
                             </div>
                             <div>
-                                <div class="health-stat-label">Alertes nouvelles</div>
-                                <div class="health-stat-value">{{ stats.alertes }}</div>
+                                <div class="health-stat-label">Alert import</div>
+                                <div class="health-stat-value">{{ import_stats.alertes }}</div>
                             </div>
                             <div>
-                                <div class="health-stat-label">Rapports</div>
-                                <div class="health-stat-value">{{ stats.rapports }}</div>
+                                <div class="health-stat-label">Import</div>
+                                <div class="health-stat-value">{{ import_stats.fichiers }}</div>
                             </div>
                         </div>
                     </div>
@@ -411,7 +459,6 @@
                         </div>
                         <h4>Sécurité des Journaux</h4>
                         <p>Les mots de passe et données sensibles sont chiffrés. Les accès sont tracés et contrôlés par rôle.</p>
-                        <a href="#" class="security-link">Consulter les politiques →</a>
                     </div>
                 </div>
             </div>
@@ -617,7 +664,7 @@
 (function () {
     var titles = {
         activite: "Historique de l'activité - Tous les serveurs",
-        analyse: "Analyse Approfondie – Logs",
+        import: "Import de logs",
         alertes: "Alertes & Anomalies",
         serveurs: "Serveurs monitorés",
         "logs-serveur": "Logs — {{ serveur_actif.nom|default:'Serveur'|escapejs }}"
@@ -642,6 +689,9 @@
 
         if (name === 'logs-serveur' && serveurIp) {
             history.replaceState(null, '', '?serveur_ip=' + encodeURIComponent(serveurIp) + '#logs-serveur');
+        } else if (name === 'import') {
+            var importQs = params.toString();
+            history.replaceState(null, '', location.pathname + (importQs ? '?' + importQs : '') + '#import');
         } else if (name === 'activite' && params.get('filtrer') === '1') {
             var qs = location.search || '?filtrer=1';
             if (qs.indexOf('#') !== -1) {
@@ -658,6 +708,14 @@
             showSection(btn.dataset.section);
         });
     });
+
+    var importLink = document.querySelector('#submenu-import a[href="#import"]');
+    if (importLink) {
+        importLink.addEventListener('click', function (event) {
+            event.preventDefault();
+            showSection('import');
+        });
+    }
 
     var hash = location.hash.replace('#', '');
     if (hash === 'logs-serveur') {

@@ -1312,6 +1312,40 @@ details.filters-advanced summary:hover { color: var(--green-700); }
 
 .fab:hover { background: var(--green-800); transform: scale(1.05); }
 
+.flash-messages {
+    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.flash-message {
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+}
+
+.flash-success {
+    background: #e8f5e9;
+    color: #2e7d32;
+    border: 1px solid #a5d6a7;
+}
+
+.flash-error {
+    background: #ffebee;
+    color: #c62828;
+    border: 1px solid #ef9a9a;
+}
+
+.import-upload-form input[type="file"] {
+    width: 100%;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    background: var(--white);
+    font-size: 0.9rem;
+}
+
 /* ── Responsive ── */
 
 @media (max-width: 1024px) {

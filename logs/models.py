@@ -148,3 +148,58 @@ class Commentaire(models.Model):
 
     def __str__(self):
         return f"Commentaire de {self.utilisateur} sur log #{self.log.id_log}"
+
+
+class ImportLogFichier(models.Model):
+    id_fichier = models.AutoField(primary_key=True)
+    utilisateur = models.ForeignKey(
+        Utilisateur,
+        on_delete=models.CASCADE,
+        db_column='ID_UTILISATEUR',
+    )
+    nom_fichier = models.CharField(max_length=255)
+    date_import = models.DateTimeField(auto_now_add=True)
+    lignes_importees = models.PositiveIntegerField(default=0)
+    lignes_rejetees = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = 'IMPORT_LOG_FICHIER'
+        verbose_name = 'Fichier de logs importé'
+        verbose_name_plural = 'Fichiers de logs importés'
+        ordering = ['-date_import']
+
+    def __str__(self):
+        return self.nom_fichier
+
+
+class ImportLogEntree(models.Model):
+    id_entree = models.AutoField(primary_key=True)
+    fichier = models.ForeignKey(
+        ImportLogFichier,
+        on_delete=models.CASCADE,
+        related_name='entrees',
+        db_column='ID_FICHIER',
+    )
+    nom_serveur = models.CharField(max_length=100)
+    ip_serveur = models.CharField(max_length=45)
+    date_log = models.CharField(max_length=20)
+    heure_log = models.CharField(max_length=20)
+    ip_visiteur = models.CharField(max_length=45)
+    methode = models.CharField(max_length=10)
+    url = models.CharField(max_length=512)
+    code_http = models.IntegerField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'IMPORT_LOG_ENTREE'
+        verbose_name = 'Entrée de log importée'
+        verbose_name_plural = 'Entrées de logs importées'
+        ordering = ['-id_entree']
+
+    def __str__(self):
+        return f'{self.ip_serveur} {self.url} ({self.code_http})'
+
+    @property
+    def est_erreur(self) -> bool:
+        if self.code_http is None:
+            return True
+        return self.code_http >= 400

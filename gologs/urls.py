@@ -30,6 +30,7 @@ urlpatterns = [
     path('servers/', views.servers_view, name='servers'),
     path('log-stats/', views.log_stats, name='log_stats'),
     path('export/server-logs/', views.export_server_logs_csv, name='export_server_logs'),
+    path('import/logs/', views.import_logs_csv, name='import_logs_csv'),
     path('password-reset/', views.password_reset_request_view, name='password_reset'),
     path('password-reset/done/', views.password_reset_done_view, name='password_reset_done'),
     path(

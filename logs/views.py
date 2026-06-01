@@ -1,10 +1,12 @@
 from django.contrib import messages
 from django.core.cache import cache
 from django.db.models import Q
+from django.views.decorators.http import require_POST
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
 
 from logs.access_log_csv import build_server_access_log_csv
+from logs.import_log_csv import ImportLogCsvError, import_csv_file
 from logs.auth import authenticate_user
 from logs.registration import register_user
 from logs.log_search import apply_log_search, parse_search_terms
@@ -20,7 +22,17 @@ from logs.services.log_analyzer import (
     get_resolved_log_path,
     get_server_log_config,
 )
-from logs.models import Alerte, Anomalie, LogEntree, Rapport, SourceLog, Serveur, Utilisateur
+from logs.models import (
+    Alerte,
+    Anomalie,
+    ImportLogEntree,
+    ImportLogFichier,
+    LogEntree,
+    Rapport,
+    SourceLog,
+    Serveur,
+    Utilisateur,
+)
 from logs.password_reset import (
     parse_reset_token,
     request_password_reset,
@@ -407,6 +419,60 @@ def dashboard(request):
         context['logs_filtres_count'] = access_logs_total
         context['filtres_actifs'] = filtres_actifs
 
+        import_serveur = request.GET.get('import_serveur', '').strip()
+        import_type_log = request.GET.get('import_type_log', '').strip()
+        import_date = request.GET.get('import_date', '').strip()
+        import_q = request.GET.get('import_q', '').strip()
+
+        import_queryset = ImportLogEntree.objects.select_related('fichier').all()
+        if import_serveur:
+            import_queryset = import_queryset.filter(ip_serveur=import_serveur)
+        if import_type_log == 'erreur':
+            import_queryset = import_queryset.filter(
+                Q(code_http__gte=400) | Q(code_http__isnull=True),
+            )
+        elif import_type_log == 'normal':
+            import_queryset = import_queryset.filter(code_http__lt=400)
+        if import_date:
+            import_queryset = import_queryset.filter(
+                fichier__date_import__date=import_date,
+            )
+        if import_q:
+            import_queryset = import_queryset.filter(
+                Q(ip_visiteur__icontains=import_q) | Q(url__icontains=import_q),
+            )
+
+        import_logs_filtres = import_queryset.order_by('-id_entree')[:100]
+        import_logs_count = import_queryset.count()
+        import_serveurs_disponibles = (
+            ImportLogEntree.objects.order_by('ip_serveur')
+            .values('ip_serveur', 'nom_serveur')
+            .distinct()
+        )
+
+        context['import_logs'] = import_logs_filtres
+        context['import_logs_count'] = import_logs_count
+        context['import_serveurs_disponibles'] = import_serveurs_disponibles
+        context['import_filters'] = {
+            'serveur': import_serveur,
+            'type_log': import_type_log,
+            'date': import_date,
+            'q': import_q,
+        }
+        context['import_filtres_actifs'] = any([
+            import_serveur,
+            import_type_log,
+            import_date,
+            import_q,
+        ])
+        context['import_stats'] = {
+            'fichiers': ImportLogFichier.objects.count(),
+            'alertes': ImportLogEntree.objects.filter(
+                Q(code_http__gte=400) | Q(code_http__isnull=True),
+            ).count(),
+            'serveurs': ImportLogEntree.objects.values('ip_serveur').distinct().count(),
+        }
+
     return render(request, 'logs/dashboard.html', context)
 
 
@@ -449,6 +515,39 @@ def export_server_logs_csv(request):
     response = HttpResponse(csv_content, content_type='text/csv; charset=utf-8')
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
+
+
+@require_POST
+def import_logs_csv(request):
+    if not _is_authenticated(request):
+        return redirect('login')
+
+    utilisateur = Utilisateur.objects.filter(
+        id_utilisateur=request.session.get(SESSION_USER_ID),
+    ).first()
+    if not utilisateur or utilisateur.role.strip().lower() != 'admin':
+        return redirect('dashboard')
+
+    uploaded = request.FILES.get('fichier_csv')
+    if not uploaded:
+        messages.error(request, 'Veuillez sélectionner un fichier CSV.')
+        return redirect('/dashboard/#import')
+
+    if not uploaded.name.lower().endswith('.csv'):
+        messages.error(request, 'Seuls les fichiers .csv sont acceptés.')
+        return redirect('/dashboard/#import')
+
+    try:
+        fichier = import_csv_file(uploaded, utilisateur, uploaded.name)
+    except ImportLogCsvError as exc:
+        messages.error(request, str(exc))
+        return redirect('/dashboard/#import')
+
+    messages.success(
+        request,
+        f'Import réussi : {fichier.lignes_importees} ligne(s) depuis « {fichier.nom_fichier} ».',
+    )
+    return redirect('/dashboard/#import')
 
 
 def password_reset_request_view(request):
