@@ -1,9 +1,0 @@
-Type de rapport,Synthèse des logs
-Période,2026-06-01 à 2026-06-01
-Logs importés,1
-Anomalies détectées,0
-Alertes générées,0
-
-Logs détaillés
-ID,Source,Serveur,Horodatage,Niveau,Service,Message
-1,Source C,Server3,2026-06-01 22:13:24.257047+00:00,INFO,web,Requête traitée
