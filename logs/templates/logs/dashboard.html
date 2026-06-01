@@ -608,10 +608,6 @@
                 </div>
             </div>
 
-            <button class="fab" id="fab-export" type="button" title="Exporter" aria-label="Exporter" hidden>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-            </button>
-
             {% endif %}
         </div>
     </div>
@@ -629,12 +625,6 @@
 
     var params = new URLSearchParams(location.search);
     var serveurIp = params.get('serveur_ip');
-    var fabExport = document.getElementById('fab-export');
-
-    function toggleFab(sectionName) {
-        if (!fabExport) return;
-        fabExport.hidden = sectionName !== 'logs-serveur';
-    }
 
     function showSection(name) {
         document.querySelectorAll('.dashboard-section').forEach(function (el) {
@@ -661,8 +651,6 @@
         } else {
             history.replaceState(null, '', location.pathname + '#' + name);
         }
-
-        toggleFab(name);
     }
 
     document.querySelectorAll('.nav-item[data-section]').forEach(function (btn) {

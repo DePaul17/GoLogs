@@ -7,7 +7,15 @@
             <span class="nav-submenu-status">UP</span>
         </div>
     </div>
-    <a href="{% url 'dashboard' %}#activite" class="card-reset">← Tous les serveurs</a>
+    <div class="server-logs-actions">
+        {% if serveur_logs %}
+        <a href="{% url 'export_server_logs' %}?serveur_ip={{ serveur_actif.ip }}" class="btn-filter">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            Exporter CSV
+        </a>
+        {% endif %}
+        <a href="{% url 'dashboard' %}#activite" class="card-reset">← Tous les serveurs</a>
+    </div>
 </div>
 
 {% if serveur_logs_error %}

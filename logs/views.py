@@ -1,8 +1,10 @@
 from django.contrib import messages
 from django.core.cache import cache
 from django.db.models import Q
+from django.http import HttpResponse
 from django.shortcuts import redirect, render
 
+from logs.access_log_csv import build_server_access_log_csv
 from logs.auth import authenticate_user
 from logs.registration import register_user
 from logs.log_search import apply_log_search, parse_search_terms
@@ -421,6 +423,32 @@ def log_stats(request):
 
     host = getattr(settings, 'LOG_HOST_IP', '192.168.1.11')
     return redirect(f'/dashboard/?serveur_ip={host}#logs-serveur')
+
+
+def export_server_logs_csv(request):
+    if not _is_authenticated(request):
+        return redirect('login')
+
+    utilisateur = Utilisateur.objects.filter(
+        id_utilisateur=request.session.get(SESSION_USER_ID),
+    ).first()
+    if not utilisateur or utilisateur.role.strip().lower() != 'admin':
+        return redirect('dashboard')
+
+    serveur_ip = request.GET.get('serveur_ip', '').strip()
+    if not serveur_ip or not get_server_log_config(serveur_ip):
+        messages.error(request, 'Serveur invalide ou sans journal web configuré.')
+        return redirect('dashboard')
+
+    try:
+        filename, csv_content = build_server_access_log_csv(serveur_ip)
+    except LogAnalyzerError as exc:
+        messages.error(request, str(exc))
+        return redirect(f'/dashboard/?serveur_ip={serveur_ip}#logs-serveur')
+
+    response = HttpResponse(csv_content, content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
 
 
 def password_reset_request_view(request):

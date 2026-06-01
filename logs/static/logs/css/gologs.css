@@ -520,6 +520,13 @@ button, input, select { font-family: inherit; }
     margin-bottom: 1.5rem;
 }
 
+.server-logs-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-shrink: 0;
+}
+
 .server-logs-title {
     margin: 0 0 0.35rem;
     font-size: 1.35rem;
