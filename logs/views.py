@@ -212,6 +212,7 @@ def dashboard(request):
 
         search_query = request.GET.get('q', '').strip()
         type_log = request.GET.get('type_log', '').strip()
+        niveau_filter = request.GET.get('niveau', '').strip()
         filtre_serveur = request.GET.get('filtre_serveur', '').strip()
         service_filter = request.GET.get('service', '').strip()
         source_filter = request.GET.get('source', '').strip()
@@ -223,6 +224,8 @@ def dashboard(request):
         search_terms = parse_search_terms(search_query)
         if search_terms:
             logs_queryset = apply_log_search(logs_queryset, search_query)
+        if niveau_filter:
+            logs_queryset = logs_queryset.filter(niveau__iexact=niveau_filter)
         if service_filter:
             logs_queryset = logs_queryset.filter(service__iexact=service_filter)
         if source_filter:
@@ -441,6 +444,7 @@ def dashboard(request):
         context['log_filters'] = {
             'q': search_query,
             'type_log': type_log,
+            'niveau': niveau_filter,
             'filtre_serveur': filtre_serveur,
             'service': service_filter,
             'source': source_filter,

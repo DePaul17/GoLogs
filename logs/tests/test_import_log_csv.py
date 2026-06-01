@@ -36,7 +36,7 @@ class ImportLogCsvTest(TestCase):
         self.assertEqual(ImportLogFichier.objects.count(), 1)
         self.assertEqual(ImportLogEntree.objects.count(), 2)
 
-        entry = ImportLogEntree.objects.first()
+        entry = ImportLogEntree.objects.get(url='/index')
         self.assertEqual(entry.ip_serveur, '192.168.1.11')
         self.assertEqual(entry.code_http, 200)
 
