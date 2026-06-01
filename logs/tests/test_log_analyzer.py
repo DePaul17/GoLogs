@@ -6,6 +6,7 @@ from logs.services.log_analyzer import (
     filter_access_entries,
     parse_access_log_entries,
     parse_combined_log_line,
+    resolve_visitor_ip,
 )
 
 SAMPLE_LOG = """\
@@ -35,6 +36,46 @@ class LogAnalyzerParseTest(SimpleTestCase):
     def test_parse_combined_log_line_invalid(self):
         self.assertIsNone(parse_combined_log_line(''))
         self.assertIsNone(parse_combined_log_line('not a log line'))
+
+    def test_parse_ngrok_external_visitor_ip(self):
+        line = (
+            '86.241.32.15 192.168.1.11 - - [01/Jun/2026:10:23:45 +0000] '
+            '"GET / HTTP/1.1" 200 1234'
+        )
+        parsed = parse_combined_log_line(line)
+
+        self.assertIsNotNone(parsed)
+        self.assertEqual(parsed['ip'], '86.241.32.15')
+        self.assertNotEqual(parsed['ip'], '192.168.1.11')
+
+    def test_parse_ngrok_local_visitor_ip(self):
+        line = (
+            '- 192.168.1.50 - - [01/Jun/2026:10:23:45 +0000] '
+            '"GET / HTTP/1.1" 200 1234'
+        )
+        parsed = parse_combined_log_line(line)
+
+        self.assertIsNotNone(parsed)
+        self.assertEqual(parsed['ip'], '192.168.1.50')
+
+    def test_resolve_visitor_ip_helper(self):
+        self.assertEqual(resolve_visitor_ip('86.241.32.15', '192.168.1.11'), '86.241.32.15')
+        self.assertEqual(resolve_visitor_ip('-', '192.168.1.50'), '192.168.1.50')
+        self.assertEqual(resolve_visitor_ip('192.168.1.5'), '192.168.1.5')
+
+    def test_analyze_access_log_ignores_vm_ip_with_ngrok(self):
+        ngrok_log = (
+            '86.241.32.15 192.168.1.11 - - [01/Jun/2026:10:00:01 +0000] '
+            '"GET / HTTP/1.1" 200 100\n'
+            '- 192.168.1.50 - - [01/Jun/2026:10:00:02 +0000] '
+            '"GET /about HTTP/1.1" 200 200\n'
+        )
+        stats = analyze_access_log(ngrok_log)
+        top_ips = {row['ip'] for row in stats['top_ips']}
+
+        self.assertIn('86.241.32.15', top_ips)
+        self.assertIn('192.168.1.50', top_ips)
+        self.assertNotIn('192.168.1.11', top_ips)
 
     def test_parse_access_log_entries(self):
         entries = parse_access_log_entries(SAMPLE_LOG, '192.168.1.11', 'Site témoin')

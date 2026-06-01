@@ -22,6 +22,19 @@ COMBINED_LOG_RE = re.compile(
     r'(?: .*)?$',
 )
 
+# Apache derrière ngrok : IP visiteur + IP VM, puis ident/userid (- -)
+NGROK_COMBINED_LOG_RE = re.compile(
+    r'^'
+    r'(?P<ip_forwarded>\S+) '
+    r'(?P<ip_peer>\S+) '
+    r'- - '
+    r'\[(?P<timestamp>[^\]]+)\] '
+    r'"(?P<method>[A-Z]+) (?P<url>\S+)(?: HTTP/[\d.]+)?" '
+    r'(?P<status>\d{3}|-) '
+    r'(?P<bytes>\S+)'
+    r'(?: .*)?$',
+)
+
 TOP_LIMIT = 20
 RECENT_LIMIT = 50
 FILTER_LIMIT = 100
@@ -313,16 +326,39 @@ def _parse_apache_timestamp(raw: str) -> datetime | None:
     return None
 
 
+def resolve_visitor_ip(primary: str, secondary: str | None = None) -> str:
+    """
+    Extrait l'IP réelle du visiteur.
+
+    Format ngrok : « IP_externe IP_vm - - » ou « - IP_locale - - ».
+    Format standard : un seul champ IP (ident/userid suivants).
+    """
+    if secondary is None:
+        return primary if primary != '-' else '—'
+    if primary != '-':
+        return primary
+    if secondary != '-':
+        return secondary
+    return '—'
+
+
 def parse_combined_log_line(line: str) -> dict[str, object] | None:
     """Parse une ligne Combined Log Format ; retourne None si non reconnue."""
     line = line.strip()
     if not line:
         return None
-    match = COMBINED_LOG_RE.match(line)
-    if not match:
-        return None
 
-    data = match.groupdict()
+    ngrok_match = NGROK_COMBINED_LOG_RE.match(line)
+    if ngrok_match:
+        data = ngrok_match.groupdict()
+        data['ip'] = resolve_visitor_ip(data.pop('ip_forwarded'), data.pop('ip_peer'))
+    else:
+        match = COMBINED_LOG_RE.match(line)
+        if not match:
+            return None
+        data = match.groupdict()
+        data['ip'] = resolve_visitor_ip(data['ip'])
+
     dt = _parse_apache_timestamp(data['timestamp'])
     data['datetime'] = dt
     data['date_display'] = dt.strftime('%d/%m/%Y') if dt else '—'
