@@ -19,6 +19,7 @@ COMBINED_LOG_RE = re.compile(
     r'"(?P<method>[A-Z]+) (?P<url>\S+)(?: HTTP/[\d.]+)?" '
     r'(?P<status>\d{3}|-) '
     r'(?P<bytes>\S+)'
+    r'(?: .*)?$',
 )
 
 TOP_LIMIT = 20
@@ -26,6 +27,7 @@ RECENT_LIMIT = 50
 FILTER_LIMIT = 100
 DEFAULT_LOG_CANDIDATES = (
     '/var/log/apache2/access.log',
+    '/var/log/apache2/other_vhosts_access.log',
     '/var/log/nginx/access.log',
     '/var/log/httpd/access_log',
 )
@@ -114,6 +116,41 @@ def _content_has_access_lines(content: str) -> bool:
     return False
 
 
+def _latest_timestamp_in_content(content: str) -> datetime | None:
+    """Dernière entrée parsée — sert à choisir le journal le plus à jour."""
+    latest: datetime | None = None
+    for line in content.splitlines():
+        parsed = parse_combined_log_line(line)
+        if parsed is None:
+            continue
+        dt = parsed.get('datetime')
+        if isinstance(dt, datetime) and (latest is None or dt > latest):
+            latest = dt
+    return latest
+
+
+def _log_content_score(content: str, mtime: float) -> tuple[float, float]:
+    latest = _latest_timestamp_in_content(content)
+    ts_score = latest.timestamp() if latest else 0.0
+    return (ts_score, mtime)
+
+
+def _local_file_mtime(path: str) -> float:
+    try:
+        return Path(path).stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def _pick_freshest_candidate(
+    candidates: list[tuple[str, str, tuple[float, float]]],
+) -> tuple[str, str] | None:
+    if not candidates:
+        return None
+    content, path, _ = max(candidates, key=lambda item: item[2])
+    return content, path
+
+
 def _tail_local_file(path: str, max_lines: int | None = None) -> str | None:
     limit = max_lines or _log_line_limit()
     log_path = Path(path)
@@ -152,15 +189,20 @@ def _tail_local_with_sudo(path: str, password: str, max_lines: int | None = None
 
 
 def _read_local_log(host_ip: str, paths: list[str], password: str = '') -> tuple[str, str] | None:
+    candidates: list[tuple[str, str, tuple[float, float]]] = []
+
     for path in paths:
-        content = _tail_local_file(path)
-        if content and _content_has_access_lines(content):
-            return content, path
-        if password:
-            content = _tail_local_with_sudo(path, password)
-            if content and _content_has_access_lines(content):
-                return content, path
-    return None
+        for content in (
+            _tail_local_file(path),
+            _tail_local_with_sudo(path, password) if password or _use_sudo() else None,
+        ):
+            if not content or not _content_has_access_lines(content):
+                continue
+            score = _log_content_score(content, _local_file_mtime(path))
+            candidates.append((content, path, score))
+
+    picked = _pick_freshest_candidate(candidates)
+    return picked
 
 
 def _ssh_exec(client: paramiko.SSHClient, command: str) -> tuple[int, str, str]:
@@ -187,6 +229,17 @@ def _remote_read_commands(path: str, password: str) -> list[str]:
     return commands
 
 
+def _remote_file_mtime(client: paramiko.SSHClient, path: str) -> float:
+    path_q = shlex.quote(path)
+    exit_code, out, _ = _ssh_exec(client, f'stat -c %Y {path_q} 2>/dev/null')
+    if exit_code != 0:
+        return 0.0
+    try:
+        return float(out.strip())
+    except ValueError:
+        return 0.0
+
+
 def _read_log_via_ssh(
     host_ip: str,
     paths: list[str],
@@ -196,14 +249,18 @@ def _read_log_via_ssh(
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     failures: list[str] = []
+    candidates: list[tuple[str, str, tuple[float, float]]] = []
 
     try:
         client.connect(**kw)
         for path in paths:
+            mtime = _remote_file_mtime(client, path)
             for command in _remote_read_commands(path, password):
                 exit_code, out, err = _ssh_exec(client, command)
                 if exit_code == 0 and _content_has_access_lines(out):
-                    return out, path
+                    score = _log_content_score(out, mtime)
+                    candidates.append((out, path, score))
+                    break
                 if err and 'Permission denied' not in err:
                     failures.append(f'{path}: {err}')
     except LogAnalyzerError:
@@ -214,6 +271,10 @@ def _read_log_via_ssh(
         ) from exc
     finally:
         client.close()
+
+    picked = _pick_freshest_candidate(candidates)
+    if picked:
+        return picked
 
     detail = failures[0] if failures else 'fichier introuvable ou permissions insuffisantes'
     tried = ', '.join(paths)

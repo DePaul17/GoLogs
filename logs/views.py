@@ -1,6 +1,8 @@
+from django.conf import settings
 from django.contrib import messages
 from django.core.cache import cache
 from django.db.models import Q
+from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 from django.http import HttpResponse
 from django.shortcuts import redirect, render
@@ -14,6 +16,7 @@ from logs.network_probe import (
     list_all_monitored_servers,
     resolve_server_name,
 )
+from logs.services.chart_data import build_chart_payload
 from logs.services.log_analyzer import (
     LogAnalyzerError,
     analyze_access_log,
@@ -33,6 +36,8 @@ from logs.models import (
     Serveur,
     Utilisateur,
 )
+from django.utils import timezone
+
 from logs.password_reset import (
     parse_reset_token,
     request_password_reset,
@@ -44,7 +49,10 @@ SESSION_USER_ID = 'utilisateur_id'
 SESSION_USER_NAME = 'utilisateur_nom'
 SESSION_USER_ROLE = 'utilisateur_role'
 ACCESS_METRICS_CACHE_KEY = 'gologs:access_metrics'
-ACCESS_METRICS_CACHE_TTL = 120
+
+
+def _access_metrics_cache_ttl() -> int:
+    return int(getattr(settings, 'LOG_ACCESS_CACHE_TTL', 0))
 
 
 def _metrics_from_log_cache(log_content_cache: dict[str, str]) -> dict[str, object]:
@@ -127,6 +135,7 @@ def logout_view(request):
     return redirect('login')
 
 
+@never_cache
 def dashboard(request):
     if not _is_authenticated(request):
         return redirect('login')
@@ -230,6 +239,10 @@ def dashboard(request):
         tous_les_serveurs = list_all_monitored_servers()
         serveurs_en_marche = [entry for entry in tous_les_serveurs if entry['up']]
         serveur_ip = request.GET.get('serveur_ip', '').strip()
+        force_log_refresh = request.GET.get('refresh') == '1'
+        if force_log_refresh:
+            cache.delete(ACCESS_METRICS_CACHE_KEY)
+
         serveur_logs = None
         serveur_logs_error = None
         serveur_actif = None
@@ -317,15 +330,30 @@ def dashboard(request):
                 )
 
         up_ips = [entry['ip'] for entry in serveurs_en_marche]
-        if log_content_cache:
+        cache_ttl = _access_metrics_cache_ttl()
+
+        if serveur_logs:
+            access_metrics = {
+                'total_requests': int(serveur_logs['total_requests']),
+                'total_404': int(serveur_logs['total_404']),
+                'incidence_404_pct': float(serveur_logs['incidence_404_pct']),
+            }
+        elif log_content_cache:
             access_metrics = _metrics_from_log_cache(log_content_cache)
-            cache.set(
-                ACCESS_METRICS_CACHE_KEY,
-                access_metrics,
-                ACCESS_METRICS_CACHE_TTL,
-            )
-        else:
+            if cache_ttl > 0:
+                cache.set(
+                    ACCESS_METRICS_CACHE_KEY,
+                    access_metrics,
+                    cache_ttl,
+                )
+        elif cache_ttl > 0:
             access_metrics = cache.get(ACCESS_METRICS_CACHE_KEY) or {
+                'total_requests': 0,
+                'total_404': 0,
+                'incidence_404_pct': 0.0,
+            }
+        else:
+            access_metrics = {
                 'total_requests': 0,
                 'total_404': 0,
                 'incidence_404_pct': 0.0,
@@ -401,6 +429,10 @@ def dashboard(request):
         context['serveur_actif'] = serveur_actif
         context['serveur_logs'] = serveur_logs
         context['serveur_logs_error'] = serveur_logs_error
+        context['serveur_chart_data'] = (
+            build_chart_payload(serveur_logs) if serveur_logs else None
+        )
+        context['logs_fetched_at'] = timezone.localtime() if serveur_logs else None
         context['search_terms'] = search_terms
         context['access_logs_filtres'] = access_logs_filtres
         context['access_pages_top'] = access_pages_top

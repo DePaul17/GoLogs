@@ -1,0 +1,72 @@
+{% if serveur_actif and serveur_chart_data %}
+<div class="server-logs-header">
+    <div>
+        <h2 class="server-logs-title">Graphiques — {{ serveur_actif.nom }}</h2>
+        <div class="server-logs-meta">
+            <span>{{ serveur_actif.ip }}</span>
+            <span class="nav-submenu-status">UP</span>
+        </div>
+    </div>
+    <div class="server-logs-actions">
+        <a href="?serveur_ip={{ serveur_actif.ip }}#logs-serveur" class="btn-secondary">
+            ← Retour aux logs
+        </a>
+    </div>
+</div>
+
+<div class="charts-grid">
+    <div class="card chart-card">
+        <div class="card-header">
+            <div>
+                <div class="card-title-lg">Pages les plus visitées</div>
+                <div class="card-subtitle">Top {{ serveur_chart_data.top_pages.data|length }} par nombre de hits</div>
+            </div>
+        </div>
+        <div class="card-body chart-canvas-wrap">
+            {% if serveur_chart_data.top_pages.data %}
+            <canvas id="chart-top-pages" role="img" aria-label="Graphique des pages les plus visitées"></canvas>
+            {% else %}
+            <div class="empty-state">Aucune page visitée à afficher.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card chart-card">
+        <div class="card-header">
+            <div>
+                <div class="card-title-lg">Répartition des codes HTTP</div>
+                <div class="card-subtitle">200 OK · 404 · erreurs serveur 5xx</div>
+            </div>
+        </div>
+        <div class="card-body chart-donut-wrap">
+            {% if serveur_chart_data.status_donut.data %}
+            <canvas id="chart-status-donut" role="img" aria-label="Graphique donut des codes HTTP"></canvas>
+            <ul class="chart-legend">
+                <li><span class="chart-legend-dot chart-legend-200"></span>200 OK — succès</li>
+                <li><span class="chart-legend-dot chart-legend-404"></span>404 — page introuvable</li>
+                <li><span class="chart-legend-dot chart-legend-5xx"></span>5xx — erreur serveur</li>
+            </ul>
+            {% else %}
+            <div class="empty-state">Aucun code HTTP à afficher.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{{ serveur_chart_data|json_script:"serveur-chart-data" }}
+{% elif serveur_logs_error %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state server-logs-error">{{ serveur_logs_error }}</div>
+        <p style="text-align:center;margin-top:1rem;">
+            <a href="?serveur_ip={{ serveur_actif.ip }}#logs-serveur" class="card-reset">← Retour aux logs</a>
+        </p>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">Sélectionnez un serveur avec des logs disponibles pour afficher les graphiques.</div>
+    </div>
+</div>
+{% endif %}

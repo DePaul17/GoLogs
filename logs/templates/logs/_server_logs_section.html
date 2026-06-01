@@ -5,10 +5,24 @@
         <div class="server-logs-meta">
             <span>{{ serveur_actif.ip }}</span>
             <span class="nav-submenu-status">UP</span>
+            {% if logs_fetched_at %}
+            <span class="server-logs-updated">MAJ {{ logs_fetched_at|date:"H:i:s" }}</span>
+            {% if serveur_logs.log_file %}
+            <span class="server-logs-updated" title="Fichier analysé">{{ serveur_logs.log_file }}</span>
+            {% endif %}
+            {% endif %}
         </div>
     </div>
     <div class="server-logs-actions">
         {% if serveur_logs %}
+        <a href="?serveur_ip={{ serveur_actif.ip }}&amp;refresh=1#logs-serveur" class="btn-secondary" title="Relire access.log">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+            Actualiser
+        </a>
+        <a href="?serveur_ip={{ serveur_actif.ip }}#logs-graphes" class="btn-secondary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+            Voir les graphes
+        </a>
         <a href="{% url 'export_server_logs' %}?serveur_ip={{ serveur_actif.ip }}" class="btn-filter">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
             Exporter CSV

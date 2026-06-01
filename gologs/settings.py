@@ -180,8 +180,10 @@ LOG_HOST_SSH_PORT = int(os.environ.get('LOG_HOST_SSH_PORT', '22'))
 LOG_SSH_CONNECT_TIMEOUT_SEC = int(os.environ.get('LOG_SSH_CONNECT_TIMEOUT_SEC', '15'))
 LOG_SSH_USE_SUDO = os.environ.get('LOG_SSH_USE_SUDO', 'true').lower() in ('1', 'true', 'yes')
 LOG_READ_LINE_LIMIT = int(os.environ.get('LOG_READ_LINE_LIMIT', '10000'))
+LOG_ACCESS_CACHE_TTL = int(os.environ.get('LOG_ACCESS_CACHE_TTL', '0'))
 LOG_FILE_PATH_CANDIDATES = [
     '/var/log/apache2/access.log',
+    '/var/log/apache2/other_vhosts_access.log',
     '/var/log/nginx/access.log',
     '/var/log/httpd/access_log',
 ]

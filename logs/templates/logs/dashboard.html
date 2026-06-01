@@ -306,6 +306,11 @@
                 {% include "logs/_server_logs_section.html" %}
             </div>
 
+            {# ── Section Graphiques serveur ── #}
+            <div class="dashboard-section" id="section-logs-graphes">
+                {% include "logs/_server_logs_charts.html" %}
+            </div>
+
             {# ── Section Import de logs ── #}
             <div class="dashboard-section" id="section-import">
 
@@ -667,11 +672,116 @@
         import: "Import de logs",
         alertes: "Alertes & Anomalies",
         serveurs: "Serveurs monitorés",
-        "logs-serveur": "Logs — {{ serveur_actif.nom|default:'Serveur'|escapejs }}"
+        "logs-serveur": "Logs — {{ serveur_actif.nom|default:'Serveur'|escapejs }}",
+        "logs-graphes": "Graphiques — {{ serveur_actif.nom|default:'Serveur'|escapejs }}"
     };
 
     var params = new URLSearchParams(location.search);
     var serveurIp = params.get('serveur_ip');
+    var serverChartsReady = false;
+    var topPagesChart = null;
+    var statusDonutChart = null;
+
+    function loadChartJs(callback) {
+        if (window.Chart) {
+            callback();
+            return;
+        }
+        var script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js';
+        script.onload = callback;
+        document.head.appendChild(script);
+    }
+
+    function initServerCharts() {
+        if (serverChartsReady) return;
+        var dataEl = document.getElementById('serveur-chart-data');
+        if (!dataEl) return;
+
+        loadChartJs(function () {
+            if (serverChartsReady || !window.Chart) return;
+            var payload = JSON.parse(dataEl.textContent);
+            var fontFamily = "'Inter', system-ui, sans-serif";
+            var gridColor = '#e5e7eb';
+            var textColor = '#4b5563';
+
+            Chart.defaults.font.family = fontFamily;
+            Chart.defaults.color = textColor;
+
+            var topCanvas = document.getElementById('chart-top-pages');
+            if (topCanvas && payload.top_pages.data.length) {
+                topPagesChart = new Chart(topCanvas, {
+                    type: 'bar',
+                    data: {
+                        labels: payload.top_pages.labels,
+                        datasets: [{
+                            label: 'Hits',
+                            data: payload.top_pages.data,
+                            backgroundColor: '#2d4a3e',
+                            borderRadius: 6,
+                            maxBarThickness: 36,
+                        }],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    title: function (items) {
+                                        var idx = items[0].dataIndex;
+                                        return payload.top_pages.full_labels[idx] || items[0].label;
+                                    },
+                                },
+                            },
+                        },
+                        scales: {
+                            x: {
+                                grid: { display: false },
+                                ticks: { maxRotation: 45, minRotation: 0 },
+                            },
+                            y: {
+                                beginAtZero: true,
+                                grid: { color: gridColor },
+                                ticks: { precision: 0 },
+                            },
+                        },
+                    },
+                });
+            }
+
+            var donutCanvas = document.getElementById('chart-status-donut');
+            if (donutCanvas && payload.status_donut.data.length) {
+                statusDonutChart = new Chart(donutCanvas, {
+                    type: 'doughnut',
+                    data: {
+                        labels: payload.status_donut.labels,
+                        datasets: [{
+                            data: payload.status_donut.data,
+                            backgroundColor: payload.status_donut.colors,
+                            borderWidth: 2,
+                            borderColor: '#ffffff',
+                            hoverOffset: 6,
+                        }],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '62%',
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: { padding: 16, usePointStyle: true },
+                            },
+                        },
+                    },
+                });
+            }
+
+            serverChartsReady = true;
+        });
+    }
 
     function showSection(name) {
         document.querySelectorAll('.dashboard-section').forEach(function (el) {
@@ -689,6 +799,9 @@
 
         if (name === 'logs-serveur' && serveurIp) {
             history.replaceState(null, '', '?serveur_ip=' + encodeURIComponent(serveurIp) + '#logs-serveur');
+        } else if (name === 'logs-graphes' && serveurIp) {
+            history.replaceState(null, '', '?serveur_ip=' + encodeURIComponent(serveurIp) + '#logs-graphes');
+            initServerCharts();
         } else if (name === 'import') {
             var importQs = params.toString();
             history.replaceState(null, '', location.pathname + (importQs ? '?' + importQs : '') + '#import');
@@ -720,6 +833,8 @@
     var hash = location.hash.replace('#', '');
     if (hash === 'logs-serveur') {
         showSection('logs-serveur');
+    } else if (hash === 'logs-graphes') {
+        showSection('logs-graphes');
     } else if (hash === 'serveurs') {
         showSection('serveurs');
     } else if (params.get('filtrer') === '1') {
