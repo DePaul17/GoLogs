@@ -310,6 +310,10 @@ button, input, select { font-family: inherit; }
 .auth-page-footer nav { display: flex; gap: 1.5rem; }
 .auth-page-footer a:hover { color: var(--gray-600); }
 
+.auth-page-footer-centered {
+    justify-content: center;
+}
+
 .alert-error {
     background: var(--red-bg);
     color: var(--red-text);
@@ -590,12 +594,36 @@ button, input, select { font-family: inherit; }
 
 .app-footer {
     margin-top: auto;
-    padding: 1rem 1.75rem 1.25rem;
+    width: 100%;
+    padding: 1.25rem 1.75rem;
     border-top: 1px solid var(--gray-200);
-    background: var(--white);
-    color: var(--gray-500);
-    font-size: 0.82rem;
+    background: var(--gray-100);
+    font-family: var(--font);
+}
+
+.app-footer-text {
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.45rem;
     text-align: center;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--gray-400);
+}
+
+.app-footer-brand {
+    color: var(--green-700);
+    letter-spacing: 0.06em;
+}
+
+.app-footer-dot {
+    color: var(--gray-300);
+    font-weight: 400;
 }
 
 .topbar {
