@@ -590,40 +590,30 @@ button, input, select { font-family: inherit; }
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    padding-bottom: 3.5rem;
 }
 
 .app-footer {
-    margin-top: auto;
-    width: 100%;
-    padding: 1.25rem 1.75rem;
+    position: fixed;
+    bottom: 0;
+    left: var(--sidebar-width);
+    right: 0;
+    z-index: 40;
+    padding: 1rem 1.75rem;
     border-top: 1px solid var(--gray-200);
     background: var(--gray-100);
     font-family: var(--font);
+    text-align: center;
 }
 
 .app-footer-text {
     margin: 0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.45rem;
-    text-align: center;
     font-size: 0.65rem;
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--gray-400);
-}
-
-.app-footer-brand {
-    color: var(--green-700);
-    letter-spacing: 0.06em;
-}
-
-.app-footer-dot {
-    color: var(--gray-300);
-    font-weight: 400;
+    text-align: center;
 }
 
 .topbar {
@@ -1485,6 +1475,10 @@ details.filters-advanced summary:hover { color: var(--green-700); }
     }
     .sidebar.open { transform: translateX(0); }
     .main-content { margin-left: 0; }
+    .app-footer {
+        left: 0;
+        right: 0;
+    }
     .filters-row { grid-template-columns: 1fr; }
     .auth-page-footer { flex-direction: column; gap: 0.5rem; text-align: center; }
 }
