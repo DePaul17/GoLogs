@@ -1379,6 +1379,15 @@ details.filters-advanced summary:hover { color: var(--green-700); }
     justify-content: center;
 }
 
+.chart-load-error {
+    margin-top: 1rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
+    background: var(--orange-bg);
+    color: var(--orange-text);
+    font-size: 0.9rem;
+}
+
 .chart-donut-wrap canvas {
     max-height: 260px;
 }

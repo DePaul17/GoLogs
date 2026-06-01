@@ -1,4 +1,5 @@
 {% load gologs_extras %}
+{% load static %}
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -665,6 +666,10 @@
     </div>
 </div>
 
+{% if is_admin %}
+<script src="{% static 'logs/js/chart.umd.min.js' %}"></script>
+{% endif %}
+
 <script>
 (function () {
     var titles = {
@@ -682,104 +687,137 @@
     var topPagesChart = null;
     var statusDonutChart = null;
 
-    function loadChartJs(callback) {
-        if (window.Chart) {
-            callback();
-            return;
+    function destroyServerCharts() {
+        if (topPagesChart) {
+            topPagesChart.destroy();
+            topPagesChart = null;
         }
-        var script = document.createElement('script');
-        script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js';
-        script.onload = callback;
-        document.head.appendChild(script);
+        if (statusDonutChart) {
+            statusDonutChart.destroy();
+            statusDonutChart = null;
+        }
+        serverChartsReady = false;
+    }
+
+    function showChartLoadError() {
+        var errorEl = document.getElementById('chart-load-error');
+        if (errorEl) {
+            errorEl.hidden = false;
+        }
     }
 
     function initServerCharts() {
-        if (serverChartsReady) return;
         var dataEl = document.getElementById('serveur-chart-data');
-        if (!dataEl) return;
+        if (!dataEl) {
+            return;
+        }
 
-        loadChartJs(function () {
-            if (serverChartsReady || !window.Chart) return;
-            var payload = JSON.parse(dataEl.textContent);
-            var fontFamily = "'Inter', system-ui, sans-serif";
-            var gridColor = '#e5e7eb';
-            var textColor = '#4b5563';
+        if (!window.Chart) {
+            showChartLoadError();
+            return;
+        }
 
-            Chart.defaults.font.family = fontFamily;
-            Chart.defaults.color = textColor;
+        destroyServerCharts();
 
-            var topCanvas = document.getElementById('chart-top-pages');
-            if (topCanvas && payload.top_pages.data.length) {
-                topPagesChart = new Chart(topCanvas, {
-                    type: 'bar',
-                    data: {
-                        labels: payload.top_pages.labels,
-                        datasets: [{
-                            label: 'Hits',
-                            data: payload.top_pages.data,
-                            backgroundColor: '#2d4a3e',
-                            borderRadius: 6,
-                            maxBarThickness: 36,
-                        }],
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                callbacks: {
-                                    title: function (items) {
-                                        var idx = items[0].dataIndex;
-                                        return payload.top_pages.full_labels[idx] || items[0].label;
-                                    },
+        var payload;
+        try {
+            payload = JSON.parse(dataEl.textContent);
+        } catch (err) {
+            showChartLoadError();
+            return;
+        }
+
+        var fontFamily = "'Inter', system-ui, sans-serif";
+        var gridColor = '#e5e7eb';
+        var textColor = '#4b5563';
+
+        Chart.defaults.font.family = fontFamily;
+        Chart.defaults.color = textColor;
+
+        var topCanvas = document.getElementById('chart-top-pages');
+        if (topCanvas && payload.top_pages && payload.top_pages.data.length) {
+            topPagesChart = new Chart(topCanvas, {
+                type: 'bar',
+                data: {
+                    labels: payload.top_pages.labels,
+                    datasets: [{
+                        label: 'Hits',
+                        data: payload.top_pages.data,
+                        backgroundColor: '#2d4a3e',
+                        borderRadius: 6,
+                        maxBarThickness: 36,
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                title: function (items) {
+                                    var idx = items[0].dataIndex;
+                                    return payload.top_pages.full_labels[idx] || items[0].label;
                                 },
                             },
                         },
-                        scales: {
-                            x: {
-                                grid: { display: false },
-                                ticks: { maxRotation: 45, minRotation: 0 },
-                            },
-                            y: {
-                                beginAtZero: true,
-                                grid: { color: gridColor },
-                                ticks: { precision: 0 },
-                            },
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { maxRotation: 45, minRotation: 0 },
+                        },
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: gridColor },
+                            ticks: { precision: 0 },
                         },
                     },
-                });
-            }
+                },
+            });
+        }
 
-            var donutCanvas = document.getElementById('chart-status-donut');
-            if (donutCanvas && payload.status_donut.data.length) {
-                statusDonutChart = new Chart(donutCanvas, {
-                    type: 'doughnut',
-                    data: {
-                        labels: payload.status_donut.labels,
-                        datasets: [{
-                            data: payload.status_donut.data,
-                            backgroundColor: payload.status_donut.colors,
-                            borderWidth: 2,
-                            borderColor: '#ffffff',
-                            hoverOffset: 6,
-                        }],
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        cutout: '62%',
-                        plugins: {
-                            legend: {
-                                position: 'bottom',
-                                labels: { padding: 16, usePointStyle: true },
-                            },
+        var donutCanvas = document.getElementById('chart-status-donut');
+        if (donutCanvas && payload.status_donut && payload.status_donut.data.length) {
+            statusDonutChart = new Chart(donutCanvas, {
+                type: 'doughnut',
+                data: {
+                    labels: payload.status_donut.labels,
+                    datasets: [{
+                        data: payload.status_donut.data,
+                        backgroundColor: payload.status_donut.colors,
+                        borderWidth: 2,
+                        borderColor: '#ffffff',
+                        hoverOffset: 6,
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '62%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { padding: 16, usePointStyle: true },
                         },
                     },
-                });
-            }
+                },
+            });
+        }
 
-            serverChartsReady = true;
+        if (topPagesChart) {
+            topPagesChart.resize();
+        }
+        if (statusDonutChart) {
+            statusDonutChart.resize();
+        }
+
+        serverChartsReady = true;
+    }
+
+    function scheduleChartInit() {
+        window.requestAnimationFrame(function () {
+            window.setTimeout(initServerCharts, 80);
         });
     }
 
@@ -799,9 +837,13 @@
 
         if (name === 'logs-serveur' && serveurIp) {
             history.replaceState(null, '', '?serveur_ip=' + encodeURIComponent(serveurIp) + '#logs-serveur');
-        } else if (name === 'logs-graphes' && serveurIp) {
-            history.replaceState(null, '', '?serveur_ip=' + encodeURIComponent(serveurIp) + '#logs-graphes');
-            initServerCharts();
+        } else if (name === 'logs-graphes') {
+            if (serveurIp) {
+                history.replaceState(null, '', '?serveur_ip=' + encodeURIComponent(serveurIp) + '#logs-graphes');
+            } else {
+                history.replaceState(null, '', location.pathname + '#logs-graphes');
+            }
+            scheduleChartInit();
         } else if (name === 'import') {
             var importQs = params.toString();
             history.replaceState(null, '', location.pathname + (importQs ? '?' + importQs : '') + '#import');
@@ -819,6 +861,16 @@
     document.querySelectorAll('.nav-item[data-section]').forEach(function (btn) {
         btn.addEventListener('click', function () {
             showSection(btn.dataset.section);
+        });
+    });
+
+    document.querySelectorAll('.js-show-graphes').forEach(function (link) {
+        link.addEventListener('click', function (event) {
+            var targetIp = (new URL(link.href, window.location.origin)).searchParams.get('serveur_ip');
+            if (location.pathname.indexOf('dashboard') !== -1 && targetIp && serveurIp === targetIp) {
+                event.preventDefault();
+                showSection('logs-graphes');
+            }
         });
     });
 

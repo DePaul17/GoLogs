@@ -1,4 +1,4 @@
-{% if serveur_actif and serveur_chart_data %}
+{% if serveur_actif and serveur_logs %}
 <div class="server-logs-header">
     <div>
         <h2 class="server-logs-title">Graphiques — {{ serveur_actif.nom }}</h2>
@@ -8,7 +8,7 @@
         </div>
     </div>
     <div class="server-logs-actions">
-        <a href="?serveur_ip={{ serveur_actif.ip }}#logs-serveur" class="btn-secondary">
+        <a href="{% url 'dashboard' %}?serveur_ip={{ serveur_actif.ip }}#logs-serveur" class="btn-secondary">
             ← Retour aux logs
         </a>
     </div>
@@ -53,13 +53,17 @@
     </div>
 </div>
 
+<div id="chart-load-error" class="chart-load-error" hidden>
+    Impossible de charger la bibliothèque de graphiques. Rechargez la page ou contactez l'administrateur.
+</div>
+
 {{ serveur_chart_data|json_script:"serveur-chart-data" }}
-{% elif serveur_logs_error %}
+{% elif serveur_actif and serveur_logs_error %}
 <div class="card">
     <div class="card-body">
         <div class="empty-state server-logs-error">{{ serveur_logs_error }}</div>
         <p style="text-align:center;margin-top:1rem;">
-            <a href="?serveur_ip={{ serveur_actif.ip }}#logs-serveur" class="card-reset">← Retour aux logs</a>
+            <a href="{% url 'dashboard' %}?serveur_ip={{ serveur_actif.ip }}#logs-serveur" class="card-reset">← Retour aux logs</a>
         </p>
     </div>
 </div>
